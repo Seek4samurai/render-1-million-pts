@@ -1,8 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadCoords } from "./functions/loadcsv";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
+
+  function clampPan(t) {
+    // Allow the offset to go slightly further so corners aren't stuck off-screen
+    const limit = 2;
+    t.x = Math.min(limit, Math.max(-limit, t.x));
+    t.y = Math.min(limit, Math.max(-limit, t.y));
+  }
 
   const transform = useRef({
     x: 0.0,
@@ -32,28 +40,27 @@ export default function Mesh() {
           vec2 pos = aData.xy;
           vEnergy = aData.z;
 
-          // Spiral Logic
-          float r = length(pos);
-          float theta = atan(pos.y, pos.x);
-          theta += r * 20.0;
-          theta += sin(r * 20.0) * 0.5;
-          r += sin(r * 15.0) * 0.05;
-          r += (fract(sin(dot(pos.xy, vec2(12.9898,78.233))) * 43758.5453) - 0.5) * 0.05;
+          // Spiral Math (Center-anchored)
+          vec2 centeredPos = (pos / 500.0) - 1.0;
 
-          pos.x = r * cos(theta);
-          pos.y = r * sin(theta);
+          float r = length(centeredPos);
+          float theta = atan(centeredPos.y, centeredPos.x);
 
-          // Apply Pan and Zoom
-          vec2 transformedPos = (pos + uOffset) * uScale;
+          // This adds a tiny random offset to the radius based on the unique X,Y of the point
+          r += (fract(sin(dot(centeredPos.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.05;
 
-          // Adjust for aspect ratio
+          theta += r * 10.0; 
+
+          vec2 swirledPos = vec2(cos(theta) * r, sin(theta) * r);
+
+          // Interaction (Pan/Zoom)
+          float baseScale = 10.0;
+          vec2 transformedPos = (swirledPos + uOffset) * (uScale * baseScale);
+
           transformedPos.x /= uAspect;
 
-          float scale = 8.0;
-          gl_Position = vec4(transformedPos * scale, 0.0, 1.0);
-          
-          // FIXED: Use built-in max() and ensure float types (1.0)
-          gl_PointSize = max(1.0, 2.0 * uScale); 
+          gl_Position = vec4(transformedPos, 0.0, 1.0);
+          gl_PointSize = max(1.0, 2.0 * uScale);
       }
     `;
 
@@ -120,6 +127,23 @@ export default function Mesh() {
     };
 
     const handleMouseMove = (e) => {
+      if (!transform.current.isDragging) {
+        // Even if not dragging, calculate world pos for the HUD
+        const rect = canvas.getBoundingClientRect();
+        const mx = ((e.clientX - rect.left) / canvas.clientWidth) * 2 - 1;
+        const my = -(((e.clientY - rect.top) / canvas.clientHeight) * 2 - 1);
+
+        const aspect = canvas.width / canvas.height;
+        const t = transform.current;
+
+        // same math as your Vertex Shader
+        const worldX = ((mx * aspect) / (t.scale * 8.0) - t.x + 1.0) * 500;
+        const worldY = (1.0 - (my / (t.scale * 8.0) - t.y)) * 500;
+
+        setCoords({ x: Math.round(worldX), y: Math.round(worldY) });
+        return;
+      }
+
       if (!transform.current.isDragging) return;
 
       const dx = e.clientX - transform.current.lastMouse.x;
@@ -168,6 +192,7 @@ export default function Mesh() {
         // smooth zoom
         const t = transform.current;
         t.scale += (t.targetScale - t.scale) * 0.05;
+        clampPan(transform.current);
 
         gl.useProgram(program);
 
@@ -195,12 +220,38 @@ export default function Mesh() {
   }, []);
 
   return (
-    <div className="w-full h-full flex justify-center items-center bg-gray-900 overflow-hidden">
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        width: "100vw",
+        height: "100vh",
+      }}
+    >
       <canvas
         ref={canvasRef}
         className="rounded-2xl cursor-move touch-none"
         style={{ width: "95vw", height: "95vh" }}
       />
+
+      <div
+        style={{
+          position: "absolute",
+          bottom: 20,
+          left: 20,
+          color: "white",
+          background: "rgba(0,0,0,0.5)",
+          padding: "10px",
+        }}
+      >
+        Song Space: {coords.x}, {coords.y}
+        <br />
+        {coords.x < 100 && coords.y < 100
+          ? "📍 Top-Left (Low Energy/Dance)"
+          : ""}
+      </div>
     </div>
   );
 }
