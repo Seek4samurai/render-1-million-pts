@@ -13,7 +13,6 @@ export default function Mesh() {
     t.x = Math.min(limit, Math.max(-limit, t.x));
     t.y = Math.min(limit, Math.max(-limit, t.y));
   }
-
   const transform = useRef({
     x: 0.0,
     y: 0.0,
@@ -22,6 +21,13 @@ export default function Mesh() {
     isDragging: false,
     lastMouse: { x: 0, y: 0 },
   });
+
+  // --- Calling location API ---
+  useEffect(() => {
+    if (currentZoom >= 1.86) {
+      calculateVisibleBoxes();
+    }
+  }, [currentZoom]);
 
   // --- SIMPLE BOX CALCULATION ---
   const calculateVisibleBoxes = () => {
@@ -187,6 +193,10 @@ export default function Mesh() {
         ((dy / canvas.clientHeight) * 1.0) / transform.current.scale;
 
       transform.current.lastMouse = { x: e.clientX, y: e.clientY };
+
+      if (transform.current.scale >= 1.85) {
+        calculateVisibleBoxes();
+      }
     };
 
     const handleMouseUp = () => {
