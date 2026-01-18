@@ -41,8 +41,17 @@ export function mapSongsToPoints(songs) {
 // }
 
 export async function loadCoords() {
-  const res = await fetch("http://localhost:8000/songs/coords?t=" + Date.now());
+  const res = await fetch("http://localhost:8000/songs/coords");
   const buffer = await res.arrayBuffer();
-  const data = new Float32Array(buffer);
-  return data;
+  return new Float32Array(buffer); // 2 floats per song
 }
+
+export const loadMeshFromBackend = async () => {
+  // i added timestamp to the URL to prevent caching
+  const response = await fetch(
+    `http://127.0.0.1:8000/load-mesh/?t=${Date.now()}`,
+  );
+  const arrayBuffer = await response.arrayBuffer();
+  const meshData = new Float32Array(arrayBuffer);
+  return meshData;
+};

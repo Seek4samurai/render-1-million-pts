@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import Crosshair from "./Components/Crosshair";
-import { loadCoords } from "./functions/loadcsv";
+import { identifySong } from "./functions/IdentifySong";
+import { loadMeshFromBackend } from "./functions/loadcsv";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
+  const coordsRef = useRef({ x: 0, y: 0 });
   const [coords, setCoords] = useState({ x: 0, y: 0 });
-  const [visibleBoxes, setVisibleBoxes] = useState([]);
   const [currentZoom, setCurrentZoom] = useState(0.5);
 
   function clampPan(t) {
@@ -21,43 +22,6 @@ export default function Mesh() {
     isDragging: false,
     lastMouse: { x: 0, y: 0 },
   });
-
-  // --- Calling location API ---
-  useEffect(() => {
-    if (currentZoom >= 1.86) {
-      calculateVisibleBoxes();
-    }
-  }, [currentZoom]);
-
-  // --- SIMPLE BOX CALCULATION ---
-  const calculateVisibleBoxes = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const t = transform.current;
-    const aspect = canvas.clientWidth / canvas.clientHeight;
-    const baseScale = 10.0;
-
-    const x1 = ((-1.0 * aspect) / (t.scale * baseScale) - t.x + 1.0) * 500;
-    const x2 = ((1.0 * aspect) / (t.scale * baseScale) - t.x + 1.0) * 500;
-    const y1 = (1.0 - (1.0 / (t.scale * baseScale) - t.y)) * 500;
-    const y2 = (1.0 - (-1.0 / (t.scale * baseScale) - t.y)) * 500;
-
-    // coordinates to Grid Indices (0-9)
-    const minGX = Math.max(0, Math.floor(x1 / 100));
-    const maxGX = Math.min(9, Math.floor(x2 / 100));
-    const minGY = Math.max(0, Math.floor(y1 / 100));
-    const maxGY = Math.min(9, Math.floor(y2 / 100));
-
-    // Collect unique Box IDs
-    let boxes = [];
-    for (let gx = minGX; gx <= maxGX; gx++) {
-      for (let gy = minGY; gy <= maxGY; gy++) {
-        boxes.push(`box_${gx}_${gy}`);
-      }
-    }
-    setVisibleBoxes(boxes);
-  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -75,30 +39,25 @@ export default function Mesh() {
       varying float vEnergy;
 
       void main() {
-          vec2 pos = aData.xy;
-          vEnergy = aData.z;
+          // The baked data is already x, y, energy
+          vec2 pos = aData.xy; 
+          
+          // If baked energy is raw (0-500), keep this. 
+          // If baked energy is normalized (0-1), remove "/500.0".
+          vEnergy = aData.z; 
 
-          // Spiral Math (Center-anchored)
-          vec2 centeredPos = (pos / 500.0) - 1.0;
-
-          float r = length(centeredPos);
-          float theta = atan(centeredPos.y, centeredPos.x);
-
-          // This adds a tiny random offset to the radius based on the unique X,Y of the point
-          r += (fract(sin(dot(centeredPos.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.05;
-
-          theta += r * 10.0; 
-
-          vec2 swirledPos = vec2(cos(theta) * r, sin(theta) * r);
-
-          // Interaction (Pan/Zoom)
           float baseScale = 10.0;
-          vec2 transformedPos = (swirledPos + uOffset) * (uScale * baseScale);
 
+          // Apply Pan & Zoom
+          vec2 transformedPos = (pos + uOffset) * (uScale * baseScale);
+          
+          // Correct for aspect ratio
           transformedPos.x /= uAspect;
 
           gl_Position = vec4(transformedPos, 0.0, 1.0);
-          gl_PointSize = max(1.0, 2.0 * uScale);
+          
+          // Dynamic point size based on zoom
+          gl_PointSize = max(1.0, 3.0 * uScale);
       }
     `;
 
@@ -155,7 +114,7 @@ export default function Mesh() {
       transform.current.targetScale *= Math.exp(-e.deltaY * zoomSpeed);
       transform.current.targetScale = Math.min(
         50,
-        Math.max(0.25, transform.current.targetScale)
+        Math.max(0.25, transform.current.targetScale),
       );
     };
 
@@ -173,11 +132,12 @@ export default function Mesh() {
         const aspect = canvas.width / canvas.height;
         const t = transform.current;
 
-        // same the Vertex Shader
-        const worldX = ((mx * aspect) / (t.scale * 8.0) - t.x + 1.0) * 500;
-        const worldY = (1.0 - (my / (t.scale * 8.0) - t.y)) * 500;
+        const worldX = (mx * aspect) / (t.scale * 10.0) - t.x;
+        const worldY = my / (t.scale * 10.0) - t.y;
 
-        setCoords({ x: Math.round(worldX), y: Math.round(worldY) });
+        coordsRef.current = { x: worldX.toFixed(3), y: worldY.toFixed(3) };
+        setCoords(coordsRef.current);
+
         return;
       }
 
@@ -193,23 +153,28 @@ export default function Mesh() {
         ((dy / canvas.clientHeight) * 1.0) / transform.current.scale;
 
       transform.current.lastMouse = { x: e.clientX, y: e.clientY };
-
-      if (transform.current.scale >= 1.85) {
-        calculateVisibleBoxes();
-      }
     };
 
     const handleMouseUp = () => {
       transform.current.isDragging = false;
     };
 
+    // ----- Still remaining br -----
+    const onClick = () => {
+      // console.log("Clicked World Coords:", coordsRef.current);
+      const { x, y } = coordsRef.current;
+      identifySong(x, y, 5);
+    };
+    // ----- YE KRNA HAI BAADME -----
+
+    canvas.addEventListener("click", onClick);
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
 
     const run = async () => {
-      const coordsRaw = await loadCoords();
+      const coordsRaw = await loadMeshFromBackend();
       const numPointsToUse = 500000;
 
       const buffer = gl.createBuffer();
@@ -257,6 +222,7 @@ export default function Mesh() {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      canvas.removeEventListener("click", onClick);
       canvas.removeEventListener("wheel", handleWheel);
       canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
@@ -273,43 +239,6 @@ export default function Mesh() {
       />
 
       <Crosshair></Crosshair>
-
-      {/* Top-Right Box Info Panel */}
-      <div className="absolute top-9 right-15 w-64 bg-black/60 backdrop-blur-sm border border-white/10 p-4 rounded-xl text-white shadow-xl">
-        <h3 className="text-sm font-bold tracking-widest uppercase text-blue-400 mb-2">
-          Spatial Index
-        </h3>
-
-        <button
-          onClick={calculateVisibleBoxes}
-          className="w-full p-1 mb-2 bg-white/10 hover:bg-white/20 active:scale-95 transition-all rounded-lg text-xs font-semibold border border-white/20"
-        >
-          IDENTIFY BOXES
-        </button>
-
-        <div className="space-y-2">
-          <div className="flex justify-between text-[10px] text-neutral-400 uppercase">
-            <span>Active Segments</span>
-            <span>{visibleBoxes.length} Total</span>
-          </div>
-          <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-            {visibleBoxes.length > 0 ? (
-              visibleBoxes.map((id) => (
-                <span
-                  key={id}
-                  className="px-2 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-[10px] rounded"
-                >
-                  {id}
-                </span>
-              ))
-            ) : (
-              <span className="text-neutral-500 text-[10px] italic">
-                No segments identified
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Bottom-Left Coordinate HUD */}
       <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
