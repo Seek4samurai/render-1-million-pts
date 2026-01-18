@@ -1,19 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import { identifySong, loadMeshFromBackend } from "./api/API";
 import Crosshair from "./Components/Crosshair";
-import { identifySong } from "./functions/IdentifySong";
-import { loadMeshFromBackend } from "./functions/loadcsv";
+import Tooltip from "./Components/Tooltip";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
   const coordsRef = useRef({ x: 0, y: 0 });
+
+  // States for maintaining GPS system
   const [coords, setCoords] = useState({ x: 0, y: 0 });
   const [currentZoom, setCurrentZoom] = useState(0.5);
+
+  // States for fetching songs
+  const songsRef = useRef([]);
+  const hoveredSongRef = useRef(null);
+  const [hoveredSong, setHoveredSong] = useState(null);
+  const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
 
   function clampPan(t) {
     const limit = 2;
     t.x = Math.min(limit, Math.max(-limit, t.x));
     t.y = Math.min(limit, Math.max(-limit, t.y));
   }
+
   const transform = useRef({
     x: 0.0,
     y: 0.0,
@@ -135,9 +144,42 @@ export default function Mesh() {
         const worldX = (mx * aspect) / (t.scale * 10.0) - t.x;
         const worldY = my / (t.scale * 10.0) - t.y;
 
-        coordsRef.current = { x: worldX.toFixed(3), y: worldY.toFixed(3) };
-        setCoords(coordsRef.current);
+        coordsRef.current = { x: worldX, y: worldY };
+        setCoords({ x: worldX.toFixed(3), y: worldY.toFixed(3) });
 
+        // --- TESTING NEW HOVER LOGIC ---
+        let found = null;
+        // The "hitbox" size. Adjust 0.005 to make it easier or harder to hover.
+        const threshold = 0.005 / t.scale;
+
+        songsRef.current.forEach((song) => {
+          const dx = worldX - song.x;
+          const dy = worldY - song.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < threshold) {
+            found = song;
+          }
+        });
+
+        setMousePx({ x: e.clientX, y: e.clientY });
+
+        if (found) {
+          // Only update if it's a DIFFERENT song than what we are already showing
+          if (
+            !hoveredSongRef.current ||
+            hoveredSongRef.current.id !== found.id
+          ) {
+            hoveredSongRef.current = found;
+            setHoveredSong(found);
+          }
+        } else {
+          // If we found nothing, and a tooltip is currently showing, HIDE IT
+          if (hoveredSongRef.current !== null) {
+            hoveredSongRef.current = null;
+            setHoveredSong(null);
+          }
+        }
         return;
       }
 
@@ -159,11 +201,12 @@ export default function Mesh() {
       transform.current.isDragging = false;
     };
 
-    // ----- Still remaining br -----
-    const onClick = () => {
-      // console.log("Clicked World Coords:", coordsRef.current);
+    // ----- Some fixes still remaining br -----
+    const onClick = async () => {
+      setHoveredSong(null); // Clear current tooltip
       const { x, y } = coordsRef.current;
-      identifySong(x, y, 5);
+      const data = await identifySong(x, y, 200);
+      songsRef.current = data;
     };
     // ----- YE KRNA HAI BAADME -----
 
@@ -239,6 +282,10 @@ export default function Mesh() {
       />
 
       <Crosshair></Crosshair>
+
+      {hoveredSong && (
+        <Tooltip mousePx={mousePx} hoveredSong={hoveredSong}></Tooltip>
+      )}
 
       {/* Bottom-Left Coordinate HUD */}
       <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
