@@ -20,7 +20,7 @@ export const loadMeshFromBackend = async () => {
 // --- Just read the name ---
 // Identifies songs for a an area
 export const identifySong = async (x, y, k) => {
-  const response = await fetch(`${API_URL}/identify-area?x=${x}&y=${y}&k=${k}`);
+  const response = await fetch(`${API_URL}/i?x=${x}&y=${y}&k=${k}`);
   const data = await response.json();
   return data;
 };

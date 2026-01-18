@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { identifySong, loadMeshFromBackend } from "./api/API";
 import Crosshair from "./Components/Crosshair";
-import Tooltip from "./Components/Tooltip";
+import Preview from "./Components/Preview";
+// import Tooltip from "./Components/Tooltip";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
@@ -32,6 +33,38 @@ export default function Mesh() {
     lastMouse: { x: 0, y: 0 },
   });
 
+  // Since the zoom is float and it triggers even in fractions of zoom level changes
+  // This was the fix I thought of...
+  const zoomStep = Math.round(currentZoom * 5) / 5; // Changes every 0.2 zoom units
+  const gridX = Math.round(coords.x * 10) / 10; // Changes every 0.1 world units
+  const gridY = Math.round(coords.y * 10) / 10;
+
+  useEffect(() => {
+    // Zoom Gate (Stay quiet if zoomed out)
+    if (currentZoom < 1.85) {
+      if (songsRef.current.length > 0) {
+        songsRef.current = [];
+      }
+      return;
+    }
+
+    // Debounce Timer
+    const delay = 150; // Reduced for snappier feel
+    const timer = setTimeout(async () => {
+      const { x, y } = coordsRef.current;
+      try {
+        const data = await identifySong(x, y, 800);
+        songsRef.current = data;
+      } catch (err) {
+        console.error("Auto-fetch failed:", err);
+      }
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [currentZoom, zoomStep, gridX, gridY]);
+
+  // ----------------------------------------
+  // ------------ Main UseEffect ------------
   useEffect(() => {
     const canvas = canvasRef.current;
     const gl = canvas.getContext("webgl");
@@ -150,6 +183,8 @@ export default function Mesh() {
         // --- TESTING NEW HOVER LOGIC ---
         let found = null;
         // The "hitbox" size. Adjust 0.005 to make it easier or harder to hover.
+        // --- TODO ----
+        // Make this value dynamic according to the zoom level
         const threshold = 0.005 / t.scale;
 
         songsRef.current.forEach((song) => {
@@ -201,16 +236,26 @@ export default function Mesh() {
       transform.current.isDragging = false;
     };
 
-    // ----- Some fixes still remaining br -----
-    const onClick = async () => {
-      setHoveredSong(null); // Clear current tooltip
-      const { x, y } = coordsRef.current;
-      const data = await identifySong(x, y, 200);
-      songsRef.current = data;
-    };
-    // ----- YE KRNA HAI BAADME -----
+    // ----- Replaced this logic with auto fetch on zoom and panning -----
+    /**
+     * Triggers song identification based on the current cursor coordinates - Hard trigger only for click.
+     *
+     * - Clears any active song tooltip.
+     * - Reads the latest (x, y) position from `coordsRef`.
+     * - Calls `identifySong` with a fixed radius of 200.
+     * - Stores the returned song list in `songsRef` without causing a re-render.
+     */
+    // const fetchSongsOnClick = async () => {
+    //   setHoveredSong(null); // Clear current tooltip
+    //   const { x, y } = coordsRef.current;
+    //   const data = await identifySong(x, y, 200);
+    //   songsRef.current = data;
+    // };
 
-    canvas.addEventListener("click", onClick);
+    // Triggers song identification based on the current cursor coordinates - Hard trigger only for click.
+    // canvas.addEventListener("click", fetchSongsOnClick);
+    // -------------------------------------------------------------------
+
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
@@ -265,7 +310,10 @@ export default function Mesh() {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      canvas.removeEventListener("click", onClick);
+
+      // Triggers song identification based on the current cursor coordinates - Hard trigger only for click.
+      // canvas.removeEventListener("click", fetchSongsOnClick);
+
       canvas.removeEventListener("wheel", handleWheel);
       canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
@@ -283,8 +331,12 @@ export default function Mesh() {
 
       <Crosshair></Crosshair>
 
-      {hoveredSong && (
+      {/* {hoveredSong && (
         <Tooltip mousePx={mousePx} hoveredSong={hoveredSong}></Tooltip>
+      )} */}
+
+      {hoveredSong && (
+        <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>
       )}
 
       {/* Bottom-Left Coordinate HUD */}
