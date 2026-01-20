@@ -18,8 +18,9 @@ export default function Mesh() {
   const [hoveredSong, setHoveredSong] = useState(null);
   const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
 
+  // ----- World controls -----
   function clampPan(t) {
-    const limit = 2;
+    const limit = 3; // Inc this to add more padding around the spiral
     t.x = Math.min(limit, Math.max(-limit, t.x));
     t.y = Math.min(limit, Math.max(-limit, t.y));
   }
@@ -78,6 +79,7 @@ export default function Mesh() {
       uniform float uAspect;
       uniform vec2 uOffset;
       uniform float uScale;
+      uniform vec2 uHoverPos;
       varying float vEnergy;
 
       void main() {
@@ -97,9 +99,19 @@ export default function Mesh() {
           transformedPos.x /= uAspect;
 
           gl_Position = vec4(transformedPos, 0.0, 1.0);
+
+          // Calculate size
+          float size = max(1.0, 3.0 * uScale);
+
+          // --- GROW LOGIC ---
+          // Check distance between this point and the hovered coordinate
+          float dist = distance(pos, uHoverPos);
+          if (dist < 0.0001) { // Very small threshold since these are world units
+              size *= 6.0; 
+          }
           
           // Dynamic point size based on zoom
-          gl_PointSize = max(1.0, 3.0 * uScale);
+          gl_PointSize = size;
       }
     `;
 
@@ -143,6 +155,7 @@ export default function Mesh() {
     gl.linkProgram(program);
     gl.useProgram(program);
 
+    const hoverPosLoc = gl.getUniformLocation(program, "uHoverPos");
     const aspectLoc = gl.getUniformLocation(program, "uAspect");
     const offsetLoc = gl.getUniformLocation(program, "uOffset");
     const scaleLoc = gl.getUniformLocation(program, "uScale");
@@ -293,6 +306,17 @@ export default function Mesh() {
         }
 
         gl.useProgram(program);
+
+        if (hoveredSongRef.current) {
+          gl.uniform2f(
+            hoverPosLoc,
+            hoveredSongRef.current.x,
+            hoveredSongRef.current.y,
+          );
+        } else {
+          // Move it far away so no points grow
+          gl.uniform2f(hoverPosLoc, -999.0, -999.0);
+        }
 
         // Now these locations are guaranteed to be from the "associated program"
         gl.uniform1f(aspectLoc, canvas.width / canvas.height);
