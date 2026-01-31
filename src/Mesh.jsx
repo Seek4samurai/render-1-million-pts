@@ -87,7 +87,7 @@ export default function Mesh() {
       0,
       gl.RGBA,
       gl.UNSIGNED_BYTE,
-      new Uint8Array([0, 0, 0, 0]),
+      new Uint8Array([0, 0, 0, 0])
     );
 
     // Set default parameters
@@ -105,15 +105,10 @@ export default function Mesh() {
       // Accessing the .current property of the ref
       if (textureCache.current.has(imgSource)) {
         const cachedImg = textureCache.current.get(imgSource);
+
         gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
-        gl.texImage2D(
-          gl.TEXTURE_2D,
-          0,
-          gl.RGBA,
-          gl.RGBA,
-          gl.UNSIGNED_BYTE,
-          cachedImg,
-        );
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cachedImg);
+
         currentUrlRef.current = imgSource;
       } else {
         const img = new Image();
@@ -128,27 +123,12 @@ export default function Mesh() {
 
             // Mandatory parameters for Non-Power-of-Two images
             // Prettier is trolling here... Needs to be fixed...
-            gl.texParameteri(
-              gl.TEXTURE_2D,
-              gl.TEXTURE_WRAP_S,
-              gl.CLAMP_TO_EDGE,
-            );
-            gl.texParameteri(
-              gl.TEXTURE_2D,
-              gl.TEXTURE_WRAP_T,
-              gl.CLAMP_TO_EDGE,
-            );
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 
-            gl.texImage2D(
-              gl.TEXTURE_2D,
-              0,
-              gl.RGBA,
-              gl.RGBA,
-              gl.UNSIGNED_BYTE,
-              img,
-            );
             currentUrlRef.current = imgSource;
           }
         };
@@ -264,10 +244,7 @@ export default function Mesh() {
       // const zoomSpeed = 0.1;
       const zoomSpeed = 0.005; // smaller = smoother
       transform.current.targetScale *= Math.exp(-e.deltaY * zoomSpeed);
-      transform.current.targetScale = Math.min(
-        50,
-        Math.max(0.25, transform.current.targetScale),
-      );
+      transform.current.targetScale = Math.min(50, Math.max(0.25, transform.current.targetScale));
     };
 
     const handleMouseDown = (e) => {
@@ -311,10 +288,7 @@ export default function Mesh() {
 
         if (found) {
           // Only update if it's a DIFFERENT song than what we are already showing
-          if (
-            !hoveredSongRef.current ||
-            hoveredSongRef.current.id !== found.id
-          ) {
+          if (!hoveredSongRef.current || hoveredSongRef.current.id !== found.id) {
             hoveredSongRef.current = found;
             setHoveredSong(found);
           }
@@ -334,11 +308,8 @@ export default function Mesh() {
       const dy = e.clientY - transform.current.lastMouse.y;
 
       // Adjust pan sensitivity based on scale
-      transform.current.x +=
-        ((dx / canvas.clientWidth) * 1.0) / transform.current.scale;
-      transform.current.y -=
-        ((dy / canvas.clientHeight) * 1.0) / transform.current.scale;
-
+      transform.current.x += ((dx / canvas.clientWidth) * 1.0) / transform.current.scale;
+      transform.current.y -= ((dy / canvas.clientHeight) * 1.0) / transform.current.scale;
       transform.current.lastMouse = { x: e.clientX, y: e.clientY };
     };
 
@@ -406,15 +377,8 @@ export default function Mesh() {
 
         if (hoveredSongRef.current) {
           // TRIGGER THE TEXTURE UPDATE
-          console.log(hoveredSongRef.current.data.cover_url);
-
           updateHoverTexture(hoveredSongRef.current.data.cover_url);
-
-          gl.uniform2f(
-            hoverPosLoc,
-            hoveredSongRef.current.x,
-            hoveredSongRef.current.y,
-          );
+          gl.uniform2f(hoverPosLoc, hoveredSongRef.current.x, hoveredSongRef.current.y);
         } else {
           // Move it far away so no points grow
           gl.uniform2f(hoverPosLoc, -999.0, -999.0);
@@ -465,18 +429,14 @@ export default function Mesh() {
         <Tooltip mousePx={mousePx} hoveredSong={hoveredSong}></Tooltip>
       )} */}
 
-      {hoveredSong && (
-        <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>
-      )}
+      {hoveredSong && <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>}
 
       {/* Bottom-Left Coordinate HUD */}
       <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
         <span className="text-blue-400">POS:</span> {coords.x}, {coords.y}
         <span className="mx-2 text-white/20">|</span>
-        <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}
-        x
+        <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}x
       </div>
     </div>
   );
 }
-

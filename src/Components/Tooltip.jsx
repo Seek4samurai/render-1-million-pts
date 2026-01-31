@@ -13,9 +13,7 @@ const Tooltip = ({ mousePx, hoveredSong }) => {
           Song Data
         </div>
         <h4 className="text-sm font-bold truncate">{hoveredSong.data.name}</h4>
-        <p className="text-xs text-neutral-400 truncate">
-          {hoveredSong.data.artists}
-        </p>
+        <p className="text-xs text-neutral-400 truncate">{hoveredSong.data.artists}</p>
 
         <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-mono text-neutral-500">
           <span>Energy: {hoveredSong.data.energy.toFixed(2)}</span>

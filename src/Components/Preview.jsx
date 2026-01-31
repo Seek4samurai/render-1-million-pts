@@ -22,9 +22,7 @@ const Preview = ({ mousePx, hoveredSong }) => {
         </h3>
         <div className="">
           <h3 className="text-3xl font-bold">{hoveredSong.data.name}</h3>
-          <h4 className="text-xl font-bold text-gray-300">
-            ({hoveredSong.data.year})
-          </h4>
+          <h4 className="text-xl font-bold text-gray-300">({hoveredSong.data.year})</h4>
         </div>
         <p className="text-xs text-neutral-400 mt-1">
           {artists.map((artist, i) => (

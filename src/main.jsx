@@ -8,6 +8,5 @@ createRoot(document.getElementById("root")).render(
     <div className="w-screen h-screen">
       <Mesh />
     </div>
-  </StrictMode>,
+  </StrictMode>
 );
-
