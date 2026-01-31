@@ -2,29 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { identifySong, loadMeshFromBackend } from "./api/API";
 import Crosshair from "./Components/Crosshair";
 import Preview from "./Components/Preview";
-// import Tooltip from "./Components/Tooltip";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
   const coordsRef = useRef({ x: 0, y: 0 });
 
-  // States for maintaining GPS system
+  // --- States for maintaining GPS system ---
   const [coords, setCoords] = useState({ x: 0, y: 0 });
   const [currentZoom, setCurrentZoom] = useState(0.5);
-
-  // States for fetching songs
-  const songsRef = useRef([]);
-  const hoveredSongRef = useRef(null);
-  const [hoveredSong, setHoveredSong] = useState(null);
-  const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
-
-  // ----- World controls -----
-  function clampPan(t) {
-    const limit = 3; // Inc this to add more padding around the spiral
-    t.x = Math.min(limit, Math.max(-limit, t.x));
-    t.y = Math.min(limit, Math.max(-limit, t.y));
-  }
-
   const transform = useRef({
     x: 0.0,
     y: 0.0,
@@ -33,6 +18,22 @@ export default function Mesh() {
     isDragging: false,
     lastMouse: { x: 0, y: 0 },
   });
+
+  // --- States for fetching songs ---
+  const songsRef = useRef([]);
+  const hoveredSongRef = useRef(null);
+  const [hoveredSong, setHoveredSong] = useState(null);
+  const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
+
+  // --- Ref for show image on hover ---
+  const currentUrlRef = useRef(null);
+
+  // ----- World controls -----
+  const clampPan = (t) => {
+    const limit = 3; // Inc this to add more padding around the spiral
+    t.x = Math.min(limit, Math.max(-limit, t.x));
+    t.y = Math.min(limit, Math.max(-limit, t.y));
+  };
 
   // Since the zoom is float and it triggers even in fractions of zoom level changes
   // This was the fix I thought of...
@@ -66,10 +67,93 @@ export default function Mesh() {
 
   // ----------------------------------------
   // ------------ Main UseEffect ------------
+  const textureCache = useRef(new Map());
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const gl = canvas.getContext("webgl");
     if (!gl) return;
+
+    // Create the texture object once
+    const hoverTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
+    // Fill with a 1x1 transparent pixel
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      1,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array([0, 0, 0, 0]),
+    );
+
+    // Set default parameters
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    const updateHoverTexture = (imgSource) => {
+      // if (!imgSource) {
+      //   console.log("Issue in image or image not found");
+      //   return;
+      // }
+
+      // Accessing the .current property of the ref
+      if (textureCache.current.has(imgSource)) {
+        const cachedImg = textureCache.current.get(imgSource);
+        gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
+        gl.texImage2D(
+          gl.TEXTURE_2D,
+          0,
+          gl.RGBA,
+          gl.RGBA,
+          gl.UNSIGNED_BYTE,
+          cachedImg,
+        );
+        currentUrlRef.current = imgSource;
+      } else {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.src = imgSource;
+        img.onload = () => {
+          // Set into .current
+          textureCache.current.set(imgSource, img);
+
+          if (hoveredSongRef.current?.cover_url === imgSource) {
+            gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
+
+            // Mandatory parameters for Non-Power-of-Two images
+            // Prettier is trolling here... Needs to be fixed...
+            gl.texParameteri(
+              gl.TEXTURE_2D,
+              gl.TEXTURE_WRAP_S,
+              gl.CLAMP_TO_EDGE,
+            );
+            gl.texParameteri(
+              gl.TEXTURE_2D,
+              gl.TEXTURE_WRAP_T,
+              gl.CLAMP_TO_EDGE,
+            );
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+            gl.texImage2D(
+              gl.TEXTURE_2D,
+              0,
+              gl.RGBA,
+              gl.RGBA,
+              gl.UNSIGNED_BYTE,
+              img,
+            );
+            currentUrlRef.current = imgSource;
+          }
+        };
+      }
+    };
 
     let animationFrameId;
 
@@ -80,6 +164,7 @@ export default function Mesh() {
       uniform vec2 uOffset;
       uniform float uScale;
       uniform vec2 uHoverPos;
+      varying float vIsHover;
       varying float vEnergy;
 
       void main() {
@@ -106,8 +191,10 @@ export default function Mesh() {
           // --- GROW LOGIC ---
           // Check distance between this point and the hovered coordinate
           float dist = distance(pos, uHoverPos);
-          if (dist < 0.0001) { // Very small threshold since these are world units
-              size *= 6.0; 
+          vIsHover = step(dist, 0.0001); // 1.0 if hovered, else 0.0
+
+          if (vIsHover > 0.5) {
+              size *= 6.0;
           }
           
           // Dynamic point size based on zoom
@@ -118,8 +205,18 @@ export default function Mesh() {
     const fs = `
       precision mediump float;
       varying float vEnergy;
+      uniform sampler2D uTexture;
+      varying float vIsHover;
 
       void main() {
+          if (vIsHover > 0.5) {
+            vec4 tex = texture2D(uTexture, gl_PointCoord);
+            gl_FragColor = vec4(tex.rgb, 1.0);
+            return;
+          }
+
+          vec2 uv = gl_PointCoord - 0.5;
+
           float h = vEnergy;
           float s = 1.0;
           float l = 0.5;
@@ -276,7 +373,7 @@ export default function Mesh() {
 
     const run = async () => {
       const coordsRaw = await loadMeshFromBackend();
-      const numPointsToUse = 500000;
+      const numPointsToUse = 50000;
 
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -308,6 +405,11 @@ export default function Mesh() {
         gl.useProgram(program);
 
         if (hoveredSongRef.current) {
+          // TRIGGER THE TEXTURE UPDATE
+          console.log(hoveredSongRef.current.data.cover_url);
+
+          updateHoverTexture(hoveredSongRef.current.data.cover_url);
+
           gl.uniform2f(
             hoverPosLoc,
             hoveredSongRef.current.x,
@@ -322,6 +424,10 @@ export default function Mesh() {
         gl.uniform1f(aspectLoc, canvas.width / canvas.height);
         gl.uniform2f(offsetLoc, transform.current.x, transform.current.y);
         gl.uniform1f(scaleLoc, transform.current.scale);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
+        gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
 
         gl.drawArrays(gl.POINTS, 0, numPointsToUse);
         animationFrameId = requestAnimationFrame(render);
@@ -350,7 +456,7 @@ export default function Mesh() {
       {/* The WebGL Canvas */}
       <canvas
         ref={canvasRef}
-        className="w-[95vw] h-[95vh] rounded-2xl cursor-move touch-none border border-white/5"
+        className="w-[95vw] h-[95vh] rounded-2xl cursor-grab active:cursor-grabbing touch-none border border-white/5"
       />
 
       <Crosshair></Crosshair>
