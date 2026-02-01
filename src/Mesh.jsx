@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { identifySong, loadMeshFromBackend } from "./api/API";
 import Crosshair from "./Components/Crosshair";
 import Preview from "./Components/Preview";
+import { MESH_CONFIG } from "./utils/Config";
+import { createProgram, initPlaceholderTexture } from "./webgl/GLUtils";
+import { fs, vs } from "./webgl/Shaders";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
@@ -30,9 +33,8 @@ export default function Mesh() {
 
   // ----- World controls -----
   const clampPan = (t) => {
-    const limit = 3; // Inc this to add more padding around the spiral
-    t.x = Math.min(limit, Math.max(-limit, t.x));
-    t.y = Math.min(limit, Math.max(-limit, t.y));
+    t.x = Math.min(MESH_CONFIG.LIMIT, Math.max(-MESH_CONFIG.LIMIT, t.x));
+    t.y = Math.min(MESH_CONFIG.LIMIT, Math.max(-MESH_CONFIG.LIMIT, t.y));
   };
 
   // Since the zoom is float and it triggers even in fractions of zoom level changes
@@ -43,7 +45,7 @@ export default function Mesh() {
 
   useEffect(() => {
     // Zoom Gate (Stay quiet if zoomed out)
-    if (currentZoom < 1.85) {
+    if (currentZoom < MESH_CONFIG.ZOOM_THRESHOLD) {
       if (songsRef.current.length > 0) {
         songsRef.current = [];
       }
@@ -75,33 +77,9 @@ export default function Mesh() {
     if (!gl) return;
 
     // Create the texture object once
-    const hoverTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
-    // Fill with a 1x1 transparent pixel
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      1,
-      1,
-      0,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      new Uint8Array([0, 0, 0, 0])
-    );
-
-    // Set default parameters
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const hoverTexture = initPlaceholderTexture(gl);
 
     const updateHoverTexture = (imgSource) => {
-      // if (!imgSource) {
-      //   console.log("Issue in image or image not found");
-      //   return;
-      // }
-
       // Accessing the .current property of the ref
       if (textureCache.current.has(imgSource)) {
         const cachedImg = textureCache.current.get(imgSource);
@@ -135,102 +113,8 @@ export default function Mesh() {
       }
     };
 
-    let animationFrameId;
-
-    // ---- SHADERS ----
-    const vs = `
-      attribute vec3 aData;
-      uniform float uAspect;
-      uniform vec2 uOffset;
-      uniform float uScale;
-      uniform vec2 uHoverPos;
-      varying float vIsHover;
-      varying float vEnergy;
-
-      void main() {
-          // The baked data is already x, y, energy
-          vec2 pos = aData.xy; 
-          
-          // If baked energy is raw (0-500), keep this. 
-          // If baked energy is normalized (0-1), remove "/500.0".
-          vEnergy = aData.z; 
-
-          float baseScale = 10.0;
-
-          // Apply Pan & Zoom
-          vec2 transformedPos = (pos + uOffset) * (uScale * baseScale);
-          
-          // Correct for aspect ratio
-          transformedPos.x /= uAspect;
-
-          gl_Position = vec4(transformedPos, 0.0, 1.0);
-
-          // Calculate size
-          float size = max(1.0, 3.0 * uScale);
-
-          // --- GROW LOGIC ---
-          // Check distance between this point and the hovered coordinate
-          float dist = distance(pos, uHoverPos);
-          vIsHover = step(dist, 0.0001); // 1.0 if hovered, else 0.0
-
-          if (vIsHover > 0.5) {
-              size *= 6.0;
-          }
-          
-          // Dynamic point size based on zoom
-          gl_PointSize = size;
-      }
-    `;
-
-    const fs = `
-      precision mediump float;
-      varying float vEnergy;
-      uniform sampler2D uTexture;
-      varying float vIsHover;
-
-      void main() {
-          if (vIsHover > 0.5) {
-            vec4 tex = texture2D(uTexture, gl_PointCoord);
-            gl_FragColor = vec4(tex.rgb, 1.0);
-            return;
-          }
-
-          vec2 uv = gl_PointCoord - 0.5;
-
-          float h = vEnergy;
-          float s = 1.0;
-          float l = 0.5;
-          float c = (1.0 - abs(2.0 * l - 1.0)) * s;
-          float x = c * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
-          float m = l - c / 2.0;
-          vec3 rgb;
-
-          if (h < 1.0/6.0) rgb = vec3(c, x, 0.0);
-          else if (h < 2.0/6.0) rgb = vec3(x, c, 0.0);
-          else if (h < 3.0/6.0) rgb = vec3(0.0, c, x);
-          else if (h < 4.0/6.0) rgb = vec3(0.0, x, c);
-          else if (h < 5.0/6.0) rgb = vec3(x, 0.0, c);
-          else rgb = vec3(c, 0.0, x);
-
-          gl_FragColor = vec4(rgb + m, 1.0);
-      }
-    `;
-
-    const compile = (type, src) => {
-      const s = gl.createShader(type);
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-        console.error("Shader Error:", gl.getShaderInfoLog(s));
-      }
-      return s;
-    };
-
-    const program = gl.createProgram();
-    gl.attachShader(program, compile(gl.VERTEX_SHADER, vs));
-    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fs));
-    gl.linkProgram(program);
-    gl.useProgram(program);
+    // Custom function to create a program instance
+    const program = createProgram(gl, vs, fs);
 
     const hoverPosLoc = gl.getUniformLocation(program, "uHoverPos");
     const aspectLoc = gl.getUniformLocation(program, "uAspect");
@@ -241,9 +125,8 @@ export default function Mesh() {
     // --- INTERACTION EVENTS ---
     const handleWheel = (e) => {
       e.preventDefault();
-      // const zoomSpeed = 0.1;
-      const zoomSpeed = 0.005; // smaller = smoother
-      transform.current.targetScale *= Math.exp(-e.deltaY * zoomSpeed);
+      transform.current.targetScale *= Math.exp(-e.deltaY * MESH_CONFIG.ZOOM_SPEED);
+      // Below is the min & max zoom levels (max = 50, min = 0.25)
       transform.current.targetScale = Math.min(50, Math.max(0.25, transform.current.targetScale));
     };
 
@@ -302,8 +185,6 @@ export default function Mesh() {
         return;
       }
 
-      if (!transform.current.isDragging) return;
-
       const dx = e.clientX - transform.current.lastMouse.x;
       const dy = e.clientY - transform.current.lastMouse.y;
 
@@ -317,34 +198,15 @@ export default function Mesh() {
       transform.current.isDragging = false;
     };
 
-    // ----- Replaced this logic with auto fetch on zoom and panning -----
-    /**
-     * Triggers song identification based on the current cursor coordinates - Hard trigger only for click.
-     *
-     * - Clears any active song tooltip.
-     * - Reads the latest (x, y) position from `coordsRef`.
-     * - Calls `identifySong` with a fixed radius of 200.
-     * - Stores the returned song list in `songsRef` without causing a re-render.
-     */
-    // const fetchSongsOnClick = async () => {
-    //   setHoveredSong(null); // Clear current tooltip
-    //   const { x, y } = coordsRef.current;
-    //   const data = await identifySong(x, y, 200);
-    //   songsRef.current = data;
-    // };
-
-    // Triggers song identification based on the current cursor coordinates - Hard trigger only for click.
-    // canvas.addEventListener("click", fetchSongsOnClick);
-    // -------------------------------------------------------------------
-
     canvas.addEventListener("wheel", handleWheel, { passive: false });
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
 
+    let animationFrameId;
+
     const run = async () => {
       const coordsRaw = await loadMeshFromBackend();
-      const numPointsToUse = 50000;
 
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -393,21 +255,15 @@ export default function Mesh() {
         gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
         gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
 
-        gl.drawArrays(gl.POINTS, 0, numPointsToUse);
+        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG.S_NUM_POINTS);
         animationFrameId = requestAnimationFrame(render);
       };
-
       render();
     };
-
     run();
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-
-      // Triggers song identification based on the current cursor coordinates - Hard trigger only for click.
-      // canvas.removeEventListener("click", fetchSongsOnClick);
-
       canvas.removeEventListener("wheel", handleWheel);
       canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);

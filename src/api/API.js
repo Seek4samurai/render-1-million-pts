@@ -1,4 +1,4 @@
-import { API_URL } from "../utils/constants";
+import { API_URL } from "../utils/Constants";
 
 // For calling the latest active coordinates from the server
 // This file is not the baked coordinates
