@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { loadMeshFromBackend } from "./api/API";
-import Crosshair from "./Components/Crosshair";
-import Preview from "./Components/Preview";
-import useAutoFetchSongs from "./hooks/useAutoFetchSongs";
-import useCanvasEvents from "./hooks/useCanvasEvents";
-import useGPS from "./hooks/useGPS";
-import { MESH_CONFIG } from "./utils/Config";
-import { createProgram, initPlaceholderTexture } from "./webgl/GLUtils";
-import { fs, vs } from "./webgl/Shaders";
+import { loadMeshFromBackend } from "../api/API";
+import useAutoFetchSongs from "../hooks/useAutoFetchSongs";
+import useCanvasEvents from "../hooks/useCanvasEvents";
+import useGPS from "../hooks/useGPS";
+import { MESH_CONFIG } from "../utils/Config";
+import { createProgram, initPlaceholderTexture } from "../webgl/GLUtils";
+import { fs, vs } from "../webgl/Shaders";
+import Crosshair from "./Crosshair";
+import Preview from "./Preview";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
