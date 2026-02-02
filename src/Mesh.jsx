@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { identifySong, loadMeshFromBackend } from "./api/API";
+import { loadMeshFromBackend } from "./api/API";
 import Crosshair from "./Components/Crosshair";
 import Preview from "./Components/Preview";
+import useAutoFetchSongs from "./hooks/useAutoFetchSongs";
+import useCanvasEvents from "./hooks/useCanvasEvents";
+import useGPS from "./hooks/useGPS";
 import { MESH_CONFIG } from "./utils/Config";
 import { createProgram, initPlaceholderTexture } from "./webgl/GLUtils";
 import { fs, vs } from "./webgl/Shaders";
@@ -31,43 +34,30 @@ export default function Mesh() {
   // --- Ref for show image on hover ---
   const currentUrlRef = useRef(null);
 
-  // ----- World controls -----
-  const clampPan = (t) => {
-    t.x = Math.min(MESH_CONFIG.LIMIT, Math.max(-MESH_CONFIG.LIMIT, t.x));
-    t.y = Math.min(MESH_CONFIG.LIMIT, Math.max(-MESH_CONFIG.LIMIT, t.y));
-  };
+  // ----------------------------------------------
+  // ----- GPS (coordinates system) handler -------
+  const { updateTransform } = useGPS(currentZoom, setCurrentZoom);
+  // ----------------------------------------------
 
-  // Since the zoom is float and it triggers even in fractions of zoom level changes
-  // This was the fix I thought of...
-  const zoomStep = Math.round(currentZoom * 5) / 5; // Changes every 0.2 zoom units
-  const gridX = Math.round(coords.x * 10) / 10; // Changes every 0.1 world units
-  const gridY = Math.round(coords.y * 10) / 10;
+  // ---------------------------------------------
+  // --- Auto fetch songs system with debounce ---
+  useAutoFetchSongs(currentZoom, coordsRef, songsRef);
+  // ---------------------------------------------
 
-  useEffect(() => {
-    // Zoom Gate (Stay quiet if zoomed out)
-    if (currentZoom < MESH_CONFIG.ZOOM_THRESHOLD) {
-      if (songsRef.current.length > 0) {
-        songsRef.current = [];
-      }
-      return;
-    }
+  // ----------------------------------------------------
+  // ----- Mouse/canvas Interactions in this hook -------
+  // Later I'll move other mouse events here too
+  useCanvasEvents(
+    coordsRef,
+    canvasRef,
+    songsRef,
+    transform,
+    hoveredSongRef,
+    setCoords,
+    setHoveredSong,
+    setMousePx
+  );
 
-    // Debounce Timer
-    const delay = 150; // Reduced for snappier feel
-    const timer = setTimeout(async () => {
-      const { x, y } = coordsRef.current;
-      try {
-        const data = await identifySong(x, y, 800);
-        songsRef.current = data;
-      } catch (err) {
-        console.error("Auto-fetch failed:", err);
-      }
-    }, delay);
-
-    return () => clearTimeout(timer);
-  }, [currentZoom, zoomStep, gridX, gridY]);
-
-  // ----------------------------------------
   // ------------ Main UseEffect ------------
   const textureCache = useRef(new Map());
 
@@ -122,100 +112,20 @@ export default function Mesh() {
     const scaleLoc = gl.getUniformLocation(program, "uScale");
     const dataLoc = gl.getAttribLocation(program, "aData");
 
-    // --- INTERACTION EVENTS ---
-    const handleWheel = (e) => {
-      e.preventDefault();
-      transform.current.targetScale *= Math.exp(-e.deltaY * MESH_CONFIG.ZOOM_SPEED);
-      // Below is the min & max zoom levels (max = 50, min = 0.25)
-      transform.current.targetScale = Math.min(50, Math.max(0.25, transform.current.targetScale));
-    };
-
-    const handleMouseDown = (e) => {
-      transform.current.isDragging = true;
-      transform.current.lastMouse = { x: e.clientX, y: e.clientY };
-    };
-
-    const handleMouseMove = (e) => {
-      if (!transform.current.isDragging) {
-        const rect = canvas.getBoundingClientRect();
-        const mx = ((e.clientX - rect.left) / canvas.clientWidth) * 2 - 1;
-        const my = -(((e.clientY - rect.top) / canvas.clientHeight) * 2 - 1);
-
-        const aspect = canvas.width / canvas.height;
-        const t = transform.current;
-
-        const worldX = (mx * aspect) / (t.scale * 10.0) - t.x;
-        const worldY = my / (t.scale * 10.0) - t.y;
-
-        coordsRef.current = { x: worldX, y: worldY };
-        setCoords({ x: worldX.toFixed(3), y: worldY.toFixed(3) });
-
-        // --- TESTING NEW HOVER LOGIC ---
-        let found = null;
-        // The "hitbox" size. Adjust 0.005 to make it easier or harder to hover.
-        // --- TODO ----
-        // Make this value dynamic according to the zoom level
-        const threshold = 0.005 / t.scale;
-
-        songsRef.current.forEach((song) => {
-          const dx = worldX - song.x;
-          const dy = worldY - song.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < threshold) {
-            found = song;
-          }
-        });
-
-        setMousePx({ x: e.clientX, y: e.clientY });
-
-        if (found) {
-          // Only update if it's a DIFFERENT song than what we are already showing
-          if (!hoveredSongRef.current || hoveredSongRef.current.id !== found.id) {
-            hoveredSongRef.current = found;
-            setHoveredSong(found);
-          }
-        } else {
-          // If we found nothing, and a tooltip is currently showing, HIDE IT
-          if (hoveredSongRef.current !== null) {
-            hoveredSongRef.current = null;
-            setHoveredSong(null);
-          }
-        }
-        return;
-      }
-
-      const dx = e.clientX - transform.current.lastMouse.x;
-      const dy = e.clientY - transform.current.lastMouse.y;
-
-      // Adjust pan sensitivity based on scale
-      transform.current.x += ((dx / canvas.clientWidth) * 1.0) / transform.current.scale;
-      transform.current.y -= ((dy / canvas.clientHeight) * 1.0) / transform.current.scale;
-      transform.current.lastMouse = { x: e.clientX, y: e.clientY };
-    };
-
-    const handleMouseUp = () => {
-      transform.current.isDragging = false;
-    };
-
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
-    canvas.addEventListener("mousedown", handleMouseDown);
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-
     let animationFrameId;
 
     const run = async () => {
       const coordsRaw = await loadMeshFromBackend();
-
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, coordsRaw, gl.STATIC_DRAW);
-
       gl.enableVertexAttribArray(dataLoc);
       gl.vertexAttribPointer(dataLoc, 3, gl.FLOAT, false, 0, 0);
 
       const render = () => {
+        // handle smooth zoom
+        updateTransform(transform);
+
         const dpr = window.devicePixelRatio || 1;
         if (canvas.width !== canvas.clientWidth * dpr) {
           canvas.width = canvas.clientWidth * dpr;
@@ -225,16 +135,6 @@ export default function Mesh() {
 
         gl.clearColor(0.1, 0.1, 0.1, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT);
-
-        // smooth zoom
-        const t = transform.current;
-        t.scale += (t.targetScale - t.scale) * 0.05;
-        clampPan(transform.current);
-
-        if (Math.abs(t.scale - currentZoom) > 0.01) {
-          setCurrentZoom(t.scale);
-        }
-
         gl.useProgram(program);
 
         if (hoveredSongRef.current) {
@@ -264,10 +164,6 @@ export default function Mesh() {
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      canvas.removeEventListener("wheel", handleWheel);
-      canvas.removeEventListener("mousedown", handleMouseDown);
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
     };
   }, []);
 
@@ -280,10 +176,6 @@ export default function Mesh() {
       />
 
       <Crosshair></Crosshair>
-
-      {/* {hoveredSong && (
-        <Tooltip mousePx={mousePx} hoveredSong={hoveredSong}></Tooltip>
-      )} */}
 
       {hoveredSong && <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>}
 

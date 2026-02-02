@@ -37,4 +37,12 @@ export const MESH_CONFIG = {
    * transform.current.targetScale *= Math.exp(-e.deltaY * MESH_CONFIG.ZOOM_SPEED);
    */
   ZOOM_SPEED: 0.005,
+
+  /**
+   * Zoom parameters
+   * Logic reference:
+   * transform.current.targetScale = Math.min(50, Math.max(0.25, t.targetScale));
+   */
+  MAX_ZOOM_IN: 50,
+  MAX_ZOOM_OUT: 0.05,
 };
