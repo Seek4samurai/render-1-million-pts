@@ -7,7 +7,7 @@ const Canvas = () => {
   const navigate = useNavigate();
 
   const [render, setRender] = useState(false);
-  const [points, setPoints] = useState("M_NUM_POINTS");
+  const [points, setPoints] = useState("S_NUM_POINTS");
   const [isHovered, setIsHovered] = useState(null);
 
   const [loading, setLoading] = useState(false); // New loading state
@@ -31,7 +31,7 @@ const Canvas = () => {
   };
 
   const options = [
-    { label: "50k", value: "S_NUM_POINTS", desc: "Potato / Low Power" },
+    { label: "50k", value: "S_NUM_POINTS", desc: "Testing / Low Power" },
     { label: "100k", value: "M_NUM_POINTS", desc: "Balanced Performance" },
     { label: "500k", value: "L_NUM_POINTS", desc: "High End GPU" },
     { label: "1M", value: "XL_NUM_POINTS", desc: "Experimental / WebGL 2" },
@@ -53,7 +53,7 @@ const Canvas = () => {
       )}
 
       {render ? (
-        <Mesh points={points} />
+        <Mesh size={points} />
       ) : loading ? (
         /* --- LOADER --- */
         <div className="w-full h-full bg-[#0a0a0a] flex flex-col items-center justify-center font-sans">

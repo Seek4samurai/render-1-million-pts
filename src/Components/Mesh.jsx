@@ -10,7 +10,7 @@ import Crosshair from "./Crosshair";
 import Preview from "./Preview";
 import Song from "./Song";
 
-export default function Mesh() {
+export default function Mesh(size) {
   const canvasRef = useRef(null);
   const coordsRef = useRef({ x: 0, y: 0 });
 
@@ -120,7 +120,7 @@ export default function Mesh() {
     let animationFrameId;
 
     const run = async () => {
-      const coordsRaw = await loadMeshFromBackend();
+      const coordsRaw = await loadMeshFromBackend(size);
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, coordsRaw, gl.STATIC_DRAW);

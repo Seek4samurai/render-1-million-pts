@@ -9,9 +9,15 @@ export async function loadCoords() {
 }
 
 // This is the API that calls baked coordinates
-export const loadMeshFromBackend = async () => {
-  // Added timestamp to the URL to prevent caching
-  const response = await fetch(`${API_URL}/load-mesh/?t=${Date.now()}`);
+// But if the size is selected small then load from frontend
+export const loadMeshFromBackend = async ({ size }) => {
+  let response = {};
+  if (size === "S_NUM_POINTS") {
+    response = await fetch("/dataset/sm/coords.bin");
+  } else {
+    // Added timestamp to the URL to prevent caching
+    response = await fetch(`${API_URL}/load-mesh/?t=${Date.now()}`);
+  }
   const arrayBuffer = await response.arrayBuffer();
   const meshData = new Float32Array(arrayBuffer);
   return meshData;
