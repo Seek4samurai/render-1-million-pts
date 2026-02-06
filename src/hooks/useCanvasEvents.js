@@ -11,6 +11,7 @@ const useCanvasEvents = (
   songsRef,
   transformRef,
   hoveredSongRef,
+  setSelectedSong,
   setCoords,
   setHoveredSong,
   setMousePx
@@ -22,8 +23,20 @@ const useCanvasEvents = (
     // --- 1. Click on a song Logic ---
     const handleClickOnSong = () => {
       if (hoveredSongRef.current) {
-        // onSongClick(hoveredSongRef.current);
+        const song = hoveredSongRef.current;
+        const t = transformRef.current;
+
         console.log(hoveredSongRef.current);
+        setSelectedSong(hoveredSongRef.current);
+
+        t.targetScale = 4.0;
+
+        // We set the target coordinates.
+        // IMPORTANT: Because of how shader math works,
+        // we set the camera offset to the NEGATIVE of the song's position
+        // so the song ends up at (0,0) in the center of the screen.
+        t.targetX = -song.x;
+        t.targetY = -song.y;
       }
     };
 
@@ -52,6 +65,9 @@ const useCanvasEvents = (
       const t = transformRef.current;
       t.isDragging = true;
       t.lastMouse = { x: e.clientX, y: e.clientY };
+
+      t.targetX = t.x;
+      t.targetY = t.y;
     };
     // This makes the window draggable only when mouse click is hold
 
@@ -140,6 +156,7 @@ const useCanvasEvents = (
     coordsRef,
     setCoords,
     setHoveredSong,
+    setSelectedSong,
     setMousePx,
   ]);
 };

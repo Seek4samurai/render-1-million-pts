@@ -30,7 +30,7 @@ const Home = () => {
   };
 
   const SpinGPU = () => {
-    // Maybe add a small delay or sound effect here later?
+    // Maybe add a small delay here later?
     console.log("Spinning up WebGL pipeline...");
     navigate("/canvas");
   };
@@ -47,19 +47,32 @@ const Home = () => {
           <a href="#" className="hover:text-black transition-colors duration-300">
             Document
           </a>
-          <a href="#" className="hover:text-black transition-colors duration-300">
+          <a
+            target="_blank"
+            href="https://www.kaggle.com/datasets/rodolfofigueroa/spotify-12m-songs"
+            className="hover:text-black transition-colors duration-300"
+          >
             Dataset
           </a>
-          <a href="#" className="hover:text-black transition-colors duration-300">
+          <a
+            target="_blank"
+            href="https://github.com/seek4samurai/render-1-million-pts"
+            className="hover:text-black transition-colors duration-300"
+          >
             GitHub
           </a>
         </div>
         <button
           onClick={verifyWebGL}
-          className={`pb-1 text-[10px] text-white flex flex-row items-center`}
+          className={`pb-1 text-md text-black flex flex-row items-center cursor-pointer`}
         >
           Verify WebGL
-          <Circle size={20} fill={`${getStatusStyles()}`} className="ml-1" />
+          <Circle
+            size={20}
+            fill={`${getStatusStyles()}`}
+            className="ml-1"
+            color={`${getStatusStyles()}`}
+          />
         </button>
       </nav>
 
@@ -84,7 +97,7 @@ const Home = () => {
 
             <div className="flex items-center gap-8">
               <button
-                className="group flex items-center gap-2 bg-[#1A1A1A] text-white px-8 py-4 rounded-full hover:bg-black transition-all"
+                className="group flex items-center gap-1 font-semibold bg-[#1A1A1A] text-white px-4 py-3 rounded-full hover:bg-black transition-all cursor-pointer"
                 onClick={() => SpinGPU()}
               >
                 Spin GPU
@@ -102,7 +115,6 @@ const Home = () => {
             </div>
           </div>
 
-          {/* Visual Side */}
           <div className="lg:col-span-5 relative">
             <div className="aspect-3/4 overflow-hidden rounded-2xl bg-gray-100 select-none">
               <img
@@ -111,7 +123,6 @@ const Home = () => {
                 className="cursor-crosshair w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-1000 select-none"
               />
             </div>
-            {/* Decorative element */}
             <div className="absolute -bottom-6 -left-6 bg-white p-5 hidden md:block shadow-sm rounded-lg cursor-pointer">
               <p className="text-[10px] uppercase tracking-widest text-gray-600 mb-1">
                 Run on your system

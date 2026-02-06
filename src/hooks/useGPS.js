@@ -18,6 +18,16 @@ const useGPS = (currentZoom, setCurrentZoom) => {
     // Smooth interpolation (Lerp) for zoom
     t.scale += (t.targetScale - t.scale) * 0.05;
 
+    if (t.isDragging) {
+      // WHILE DRAGGING: Keep target synced with manual movement
+      t.targetX = t.x;
+      t.targetY = t.y;
+    } else {
+      // WHILE IDLE: Chase the target (Auto-focus)
+      t.x += (t.targetX - t.x) * 0.1;
+      t.y += (t.targetY - t.y) * 0.1;
+    }
+
     // Apply boundaries
     clampPan(t);
 

@@ -14,7 +14,7 @@ const Preview = ({ mousePx, hoveredSong }) => {
   return (
     <>
       <div
-        className={`fixed pointer-events-none w-125 z-50 p-4 rounded-xl shadow-2xl text-white backdrop-blur-md transition-opacity duration-300 ${hoveredSong ? "opacity-100" : "opacity-0"}`}
+        className={`fixed pointer-events-none w-125 z-40 p-4 rounded-xl shadow-2xl text-white backdrop-blur-md transition-opacity duration-300 ${hoveredSong ? "opacity-100" : "opacity-0"}`}
         style={{ left: mousePx.x + 15, top: mousePx.y + 15 }}
       >
         <h3 className="text-md text-gray-300 font-semibold leading-tight flex flex-wrap">

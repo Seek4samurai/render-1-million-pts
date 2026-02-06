@@ -43,7 +43,7 @@ const Canvas = () => {
       {!render && (
         <button
           onClick={() => navigate("/")}
-          className="absolute top-8 left-8 z-50 flex items-center gap-2 text-gray-500 hover:text-white transition-colors group"
+          className="absolute top-8 left-8 z-50 flex items-center gap-2 text-gray-500 hover:text-white transition-colors group cursor-pointer"
         >
           <div className="p-1 rounded-full border border-gray-800 group-hover:border-gray-500 transition-colors">
             <ChevronLeft size={14} />
@@ -106,7 +106,7 @@ const Canvas = () => {
                   onClick={() => setPoints(opt.value)}
                   onMouseEnter={() => setIsHovered(opt.value)}
                   onMouseLeave={() => setIsHovered(null)}
-                  className={`relative p-6 text-left border rounded-xl transition-all duration-500 group ${
+                  className={`relative p-6 text-left border rounded-xl transition-all group cursor-pointer ${
                     points === opt.value
                       ? "border-white bg-white/5 shadow-[0_0_20px_rgba(255,255,255,0.05)]"
                       : "border-white/10 bg-transparent hover:border-white/30"
@@ -132,7 +132,7 @@ const Canvas = () => {
             <div className="flex flex-col items-center">
               <button
                 onClick={handleStart}
-                className="group relative flex items-center gap-3 text-white px-12 py-5 rounded-full font-bold tracking-[0.2em] hover:scale-105 active:scale-95 transition-all duration-300"
+                className="group relative flex items-center gap-3 text-white px-12 py-5 rounded-full font-semibold tracking-[0.2em] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer"
               >
                 <Play size={14} fill="black" />
                 Initialize Render
@@ -140,7 +140,7 @@ const Canvas = () => {
 
               <div className="mt-8 flex items-center gap-2 text-gray-500 text-[10px] uppercase tracking-widest">
                 <Cpu size={12} />
-                <span>Targeting {points.toLocaleString()} vertices</span>
+                <span>Targeting efficient 1,000,000 vertices</span>
               </div>
             </div>
           </div>

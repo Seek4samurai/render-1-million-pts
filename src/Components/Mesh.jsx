@@ -8,6 +8,7 @@ import { createProgram, initPlaceholderTexture } from "../webgl/GLUtils";
 import { fs, vs } from "../webgl/Shaders";
 import Crosshair from "./Crosshair";
 import Preview from "./Preview";
+import Song from "./Song";
 
 export default function Mesh() {
   const canvasRef = useRef(null);
@@ -21,6 +22,8 @@ export default function Mesh() {
     y: 0.0,
     scale: 0.5,
     targetScale: 0.5,
+    targetX: 0.0, // Initial target same as start
+    targetY: 0.0,
     isDragging: false,
     lastMouse: { x: 0, y: 0 },
   });
@@ -29,6 +32,7 @@ export default function Mesh() {
   const songsRef = useRef([]);
   const hoveredSongRef = useRef(null);
   const [hoveredSong, setHoveredSong] = useState(null);
+  const [selectedSong, setSelectedSong] = useState(null);
   const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
 
   // --- Ref for show image on hover ---
@@ -53,6 +57,7 @@ export default function Mesh() {
     songsRef,
     transform,
     hoveredSongRef,
+    setSelectedSong,
     setCoords,
     setHoveredSong,
     setMousePx
@@ -133,7 +138,7 @@ export default function Mesh() {
           gl.viewport(0, 0, canvas.width, canvas.height);
         }
 
-        gl.clearColor(0.1, 0.1, 0.1, 1.0);
+        gl.clearColor(0, 0, 0, 1.0); // Background color - Black
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.useProgram(program);
 
@@ -168,23 +173,27 @@ export default function Mesh() {
   }, []);
 
   return (
-    <div className="relative w-screen h-screen bg-neutral-950 flex items-center justify-center overflow-hidden font-sans">
-      {/* The WebGL Canvas */}
-      <canvas
-        ref={canvasRef}
-        className="w-[95vw] h-[95vh] rounded-2xl cursor-grab active:cursor-grabbing touch-none border border-white/5"
-      />
+    <>
+      <div className="relative w-screen h-screen bg-neutral-950 flex items-center justify-center overflow-hidden font-sans">
+        {/* The WebGL Canvas */}
+        <canvas
+          ref={canvasRef}
+          className="w-[95vw] h-[95vh] rounded-2xl cursor-grab active:cursor-grabbing touch-none border border-white/5"
+        />
 
-      <Crosshair></Crosshair>
+        <Song selectedSong={selectedSong} onClear={() => setSelectedSong(null)} />
 
-      {hoveredSong && <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>}
+        <Crosshair></Crosshair>
 
-      {/* Bottom-Left Coordinate HUD */}
-      <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
-        <span className="text-blue-400">POS:</span> {coords.x}, {coords.y}
-        <span className="mx-2 text-white/20">|</span>
-        <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}x
+        {hoveredSong && <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>}
+
+        {/* Bottom-Left Coordinate HUD */}
+        <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
+          <span className="text-blue-400">POS:</span> {coords.x}, {coords.y}
+          <span className="mx-2 text-white/20">|</span>
+          <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}x
+        </div>
       </div>
-    </div>
+    </>
   );
 }
