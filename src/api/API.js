@@ -13,7 +13,9 @@ export async function loadCoords() {
 export const loadMeshFromBackend = async ({ size }) => {
   let response = {};
   if (size === "S_NUM_POINTS") {
-    response = await fetch("/dataset/sm/coords.bin");
+    response = await fetch("/dataset/sm/sm_coords.bin");
+  } else if (size === "M_NUM_POINTS") {
+    response = await fetch("/dataset/m/m_coords.bin");
   } else {
     // Added timestamp to the URL to prevent caching
     response = await fetch(`${API_URL}/load-mesh/?t=${Date.now()}`);

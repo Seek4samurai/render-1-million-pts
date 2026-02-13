@@ -160,7 +160,7 @@ export default function Mesh(size) {
         gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
         gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
 
-        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG.S_NUM_POINTS);
+        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG[size.size]);
         animationFrameId = requestAnimationFrame(render);
       };
       render();
