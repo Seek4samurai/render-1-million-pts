@@ -1,12 +1,15 @@
 import { MESH_CONFIG } from "../utils/Config";
 
-const useGPS = (currentZoom, setCurrentZoom) => {
+const useGPS = (currentZoom, setCurrentZoom, size) => {
   /**
    * Clamps the panning coordinates to the world limits
    */
   const clampPan = (t) => {
-    t.x = Math.min(MESH_CONFIG.LIMIT, Math.max(-MESH_CONFIG.LIMIT, t.x));
-    t.y = Math.min(MESH_CONFIG.LIMIT, Math.max(-MESH_CONFIG.LIMIT, t.y));
+    const NORMAL_SIZES = ["S_NUM_POINTS", "M_NUM_POINTS"];
+    // Increase the map size if points size is Large or XL
+    const limit = NORMAL_SIZES.includes(size) ? MESH_CONFIG.NORMAL_LIMIT : MESH_CONFIG.LARGE_LIMIT;
+    t.x = Math.min(limit, Math.max(-limit, t.x));
+    t.y = Math.min(limit, Math.max(-limit, t.y));
   };
 
   /**

@@ -8,7 +8,8 @@ export const MESH_CONFIG = {
    * t.y = Math.min(limit, Math.max(-limit, t.y));
    * };
    */
-  LIMIT: 3,
+  NORMAL_LIMIT: 3,
+  LARGE_LIMIT: 4.5,
 
   /**
    * Zoom Gate

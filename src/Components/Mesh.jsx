@@ -40,7 +40,7 @@ export default function Mesh(size) {
 
   // ----------------------------------------------
   // ----- GPS (coordinates system) handler -------
-  const { updateTransform } = useGPS(currentZoom, setCurrentZoom);
+  const { updateTransform } = useGPS(currentZoom, setCurrentZoom, size.size);
   // ----------------------------------------------
 
   // ---------------------------------------------
