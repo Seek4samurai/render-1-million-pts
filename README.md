@@ -1,17 +1,68 @@
-# React + Vite
+# How I Rendered 1 Million Points
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A high-performance web-based visualization tool designed to render 1,000,000 points efficiently in the browser. This project demonstrates techniques for handling large datasets using hardware acceleration.
+Basically, a demo of how we can use WebGL to handle & render these large datasets on the client side.
 
-Currently, two official plugins are available:
+> ⚠️ This is **not** a traditional web application.  
+> It’s a **data visualization** focused purely on performance.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 🚀 Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- ⚡ **GPU Accelerated Rendering**  
+  Efficiently renders up to 1 million points using WebGL.  
+  _(Performance depends on your GPU.)_
 
-## Expanding the ESLint configuration
+- 🧭 **Interactive Navigation**
+  - Zoom
+  - Pan
+  - Smooth exploration of large point clouds
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- 📊 **Large Dataset Handling**
+  Optimized GPU buffers and rendering pipeline.
 
+## 🛠️ Built With
+
+- **Language:** Python / JavaScript
+- **Graphics API:** WebGL
+- **Bundler:** Vite
+
+## 🏁 Getting Started
+
+### Prerequisites
+
+- **Node.js:** [Download Node.js](https://nodejs.org/) (v16+ recommended).
+- **Python:** [Download Python](https://www.python.org/) (v3.x for data processing scripts).
+- **Modern Web Browser:** A browser that supports **WebGL 2.0** (Chrome, Firefox, Edge, or Safari).
+
+### Installation
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/Seek4samurai/render-1-million-pts.git
+   cd render-1-million-pts
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+3. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+
+# What now?
+
+From here you have your frontend ready. Now you need to setup your backend.
+
+### **Important Note**
+
+Frontend already has the ability to load upto 50,000 points without the need of a server. But if you want to hover over a point load its data, like which song
+am I hovering on? Basically its metadata you'll need to setup the server too.
+
+### To setup server follow this guide: [Server Setup Guide](https://github.com/Seek4samurai/render-1-million-pts-server)
