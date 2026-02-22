@@ -18,9 +18,12 @@ export const loadMeshFromBackend = async ({ size }) => {
     response = await fetch("/dataset/m/m_coords.bin");
   } else if (size === "L_NUM_POINTS") {
     response = await fetch("/dataset/l/l_coords.bin");
+  } else if (size === "XL_NUM_POINTS") {
+    response = await fetch("/dataset/xl/xl_coords.bin");
   } else {
+    console.log("");
     // Added timestamp to the URL to prevent caching
-    response = await fetch(`${API_URL}/load-mesh/?t=${Date.now()}`);
+    // response = await fetch(`${API_URL}/load-mesh/?t=${Date.now()}`);
   }
   const arrayBuffer = await response.arrayBuffer();
   const meshData = new Float32Array(arrayBuffer);
