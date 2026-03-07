@@ -44,7 +44,11 @@ const Home = () => {
           <span>Lumina</span>
         </div>
         <div className="hidden md:flex gap-10 text-[11px] uppercase tracking-[0.2em] font-semibold text-gray-400">
-          <a href="#" className="hover:text-black transition-colors duration-300">
+          <a
+            target="_blank"
+            href="/document/render_1m_points_document.pdf"
+            className="hover:text-black transition-colors duration-300"
+          >
             Document
           </a>
           <a
