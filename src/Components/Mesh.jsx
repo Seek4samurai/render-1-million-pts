@@ -1,3 +1,5 @@
+import * as Arrow from "apache-arrow";
+import KDBush from "kdbush";
 import { useEffect, useRef, useState } from "react";
 import useAutoFetchSongs from "../hooks/useAutoFetchSongs";
 import useCanvasEvents from "../hooks/useCanvasEvents";
@@ -14,16 +16,39 @@ export default function Mesh(props) {
   const coordsRef = useRef({ x: 0, y: 0 }); // For GPS
   const meshCoordsRef = useRef(null); // For Coordinates
 
-  // --- Testing the new approach to bring kd-tree or GPU picking to client side ---
+  // --- New approach to bring kd-tree to client side ---
+  const metadataRef = useRef(null);
+  const spatialIndexRef = useRef(null);
+
   useEffect(() => {
     const loadData = async () => {
-      const res = await fetch("/dataset/sm/sm_coords.bin");
-      const buffer = await res.arrayBuffer();
-      meshCoordsRef.current = new Float32Array(buffer);
-      setTimeout(() => {
-        props.setLoading(false);
-      }, 2000);
-      startWebGL(); // start rendering AFTER mesh loads
+      const [coordsRes, arrowRes] = await Promise.all([
+        fetch("/dataset/sm/sm_coords.bin"),
+        fetch("/dataset/sm/sm.arrow"),
+      ]);
+
+      const coordsBuf = await coordsRes.arrayBuffer();
+      const arrowBuf = await arrowRes.arrayBuffer();
+
+      const floatArray = new Float32Array(coordsBuf);
+      meshCoordsRef.current = floatArray;
+
+      // Initialize Arrow Table (Zero-copy parsing)
+      metadataRef.current = Arrow.tableFromIPC(new Uint8Array(arrowBuf));
+
+      // Building Spatial Index
+      const index = new KDBush(floatArray.length / 3);
+      for (let i = 0; i < floatArray.length; i += 3) {
+        index.add(floatArray[i], floatArray[i + 1]);
+      }
+      index.finish();
+      spatialIndexRef.current = index;
+
+      props.setLoading(false);
+
+      // ---------------------------------------
+      startWebGL(); // STARTING POINT OF WebGL
+      // ---------------------------------------
     };
     loadData();
   }, []);
@@ -59,13 +84,17 @@ export default function Mesh(props) {
 
   // ---------------------------------------------
   // --- Auto fetch songs system with debounce ---
-  useAutoFetchSongs(currentZoom, coordsRef, songsRef);
+  // -- Legacy API for fetching songs from API ---
+  // useAutoFetchSongs(currentZoom, coordsRef, songsRef);
   // ---------------------------------------------
 
   // ----------------------------------------------------
   // ----- Mouse/canvas Interactions in this hook -------
-  // Later I'll move other mouse events here too
   useCanvasEvents(
+    spatialIndexRef,
+    meshCoordsRef,
+    metadataRef,
+    currentZoom,
     coordsRef,
     canvasRef,
     songsRef,

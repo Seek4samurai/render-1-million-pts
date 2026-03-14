@@ -12,8 +12,8 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "apache-arrow": "^21.1.0",
+    "kdbush": "^4.0.2",
     "lucide-react": "^0.563.0",
-    "parquet-wasm": "^0.7.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",

@@ -19,7 +19,7 @@ export const MESH_CONFIG = {
    * return;
    * }
    */
-  ZOOM_THRESHOLD: 1.85,
+  ZOOM_THRESHOLD: 1.0,
 
   /**
    * Rendering Density
