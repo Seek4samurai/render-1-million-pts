@@ -1,5 +1,6 @@
+import * as Arrow from "apache-arrow";
+import KDBush from "kdbush";
 import { useEffect, useRef, useState } from "react";
-import { loadMeshFromBackend } from "../api/API";
 import useAutoFetchSongs from "../hooks/useAutoFetchSongs";
 import useCanvasEvents from "../hooks/useCanvasEvents";
 import useGPS from "../hooks/useGPS";
@@ -10,9 +11,47 @@ import Crosshair from "./Crosshair";
 import Preview from "./Preview";
 import Song from "./Song";
 
-export default function Mesh(size) {
+export default function Mesh(props) {
   const canvasRef = useRef(null);
-  const coordsRef = useRef({ x: 0, y: 0 });
+  const coordsRef = useRef({ x: 0, y: 0 }); // For GPS
+  const meshCoordsRef = useRef(null); // For Coordinates
+
+  // --- New approach to bring kd-tree to client side ---
+  const metadataRef = useRef(null);
+  const spatialIndexRef = useRef(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const [coordsRes, arrowRes] = await Promise.all([
+        fetch("/dataset/sm/sm_coords.bin"),
+        fetch("/dataset/sm/sm.arrow"),
+      ]);
+
+      const coordsBuf = await coordsRes.arrayBuffer();
+      const arrowBuf = await arrowRes.arrayBuffer();
+
+      const floatArray = new Float32Array(coordsBuf);
+      meshCoordsRef.current = floatArray;
+
+      // Initialize Arrow Table (Zero-copy parsing)
+      metadataRef.current = Arrow.tableFromIPC(new Uint8Array(arrowBuf));
+
+      // Building Spatial Index
+      const index = new KDBush(floatArray.length / 3);
+      for (let i = 0; i < floatArray.length; i += 3) {
+        index.add(floatArray[i], floatArray[i + 1]);
+      }
+      index.finish();
+      spatialIndexRef.current = index;
+
+      props.setLoading(false);
+
+      // ---------------------------------------
+      startWebGL(); // STARTING POINT OF WebGL
+      // ---------------------------------------
+    };
+    loadData();
+  }, []);
 
   // --- States for maintaining GPS system ---
   const [coords, setCoords] = useState({ x: 0, y: 0 });
@@ -40,18 +79,22 @@ export default function Mesh(size) {
 
   // ----------------------------------------------
   // ----- GPS (coordinates system) handler -------
-  const { updateTransform } = useGPS(currentZoom, setCurrentZoom, size.size);
+  const { updateTransform } = useGPS(currentZoom, setCurrentZoom, props.size);
   // ----------------------------------------------
 
   // ---------------------------------------------
   // --- Auto fetch songs system with debounce ---
-  useAutoFetchSongs(currentZoom, coordsRef, songsRef);
+  // -- Legacy API for fetching songs from API ---
+  // useAutoFetchSongs(currentZoom, coordsRef, songsRef);
   // ---------------------------------------------
 
   // ----------------------------------------------------
   // ----- Mouse/canvas Interactions in this hook -------
-  // Later I'll move other mouse events here too
   useCanvasEvents(
+    spatialIndexRef,
+    meshCoordsRef,
+    metadataRef,
+    currentZoom,
     coordsRef,
     canvasRef,
     songsRef,
@@ -63,10 +106,12 @@ export default function Mesh(size) {
     setMousePx
   );
 
-  // ------------ Main UseEffect ------------
+  // ------------ Main UseEffect / Function ------------
+  // Previously this was useEffect but now its a function
+  // So we call it after the mesh coords loading is done
   const textureCache = useRef(new Map());
 
-  useEffect(() => {
+  const startWebGL = () => {
     const canvas = canvasRef.current;
     const gl = canvas.getContext("webgl");
     if (!gl) return;
@@ -120,10 +165,10 @@ export default function Mesh(size) {
     let animationFrameId;
 
     const run = async () => {
-      const coordsRaw = await loadMeshFromBackend(size);
+      // ----- POSITION BUFFER -----
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, coordsRaw, gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, meshCoordsRef.current, gl.STATIC_DRAW);
       gl.enableVertexAttribArray(dataLoc);
       gl.vertexAttribPointer(dataLoc, 3, gl.FLOAT, false, 0, 0);
 
@@ -160,7 +205,7 @@ export default function Mesh(size) {
         gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
         gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
 
-        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG[size.size]);
+        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG[props.size]);
         animationFrameId = requestAnimationFrame(render);
       };
       render();
@@ -170,7 +215,7 @@ export default function Mesh(size) {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  };
 
   return (
     <>

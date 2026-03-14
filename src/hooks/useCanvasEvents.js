@@ -6,6 +6,10 @@ import { useEffect } from "react";
 import { MESH_CONFIG } from "../utils/Config";
 
 const useCanvasEvents = (
+  spatialIndexRef,
+  meshCoordsRef,
+  metadataRef,
+  currentZoom,
   coordsRef,
   canvasRef,
   songsRef,
@@ -26,10 +30,9 @@ const useCanvasEvents = (
         const song = hoveredSongRef.current;
         const t = transformRef.current;
 
-        console.log(hoveredSongRef.current);
         setSelectedSong(hoveredSongRef.current);
 
-        t.targetScale = 4.0;
+        t.targetScale = 2.0;
 
         // We set the target coordinates.
         // IMPORTANT: Because of how shader math works,
@@ -71,7 +74,7 @@ const useCanvasEvents = (
     };
     // This makes the window draggable only when mouse click is hold
 
-    // --- 5. Dragging logic ---
+    // --- 5. logic that helps on hover movement of mouse over points ---
     const handleMouseMove = (e) => {
       const t = transformRef.current;
       const rect = canvas.getBoundingClientRect();
@@ -88,37 +91,56 @@ const useCanvasEvents = (
         setCoords({ x: worldX.toFixed(3), y: worldY.toFixed(3) });
         setMousePx({ x: e.clientX, y: e.clientY });
 
-        // --- TESTING NEW HOVER LOGIC ---
-        let found = null;
-        // The "hitbox" size. Adjust 0.005 to make it easier or harder to hover.
-        // --- TODO ----
-        // Make this value dynamic according to the zoom level
-        const threshold = 0.005 / t.scale;
+        if (currentZoom > MESH_CONFIG.ZOOM_THRESHOLD) {
+          // --- TESTING NEW HOVER LOGIC ---
+          let found = null;
+          // The "hitbox" size. Adjust 0.005 to make it easier or harder to hover.
+          // --- TODO ----
+          // Make this value dynamic according to the zoom level
+          const threshold = 0.005 / t.scale;
 
-        // Optimized Search: Only loop if songs exist
-        if (songsRef.current) {
-          for (const song of songsRef.current) {
-            const dx = worldX - song.x;
-            const dy = worldY - song.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < threshold) {
-              found = song;
-              break; // Stop at first match
+          if (spatialIndexRef.current && metadataRef.current) {
+            // FALLBACK for older versions (v3 and below)
+            // Older versions used .within() or .range() as methods on the instance
+            const ids = spatialIndexRef.current.within(worldX, worldY, threshold);
+            if (ids.length > 0) {
+              const pointIdx = ids[0];
+              const arrayIdx = pointIdx * 3;
+              const row = metadataRef.current.get(pointIdx);
+              found = {
+                id: pointIdx,
+                x: meshCoordsRef.current[arrayIdx],
+                y: meshCoordsRef.current[arrayIdx + 1],
+                data: row.toJSON(),
+              };
             }
           }
-        }
 
-        if (found) {
-          // Only update if it's a DIFFERENT song than what we are already showing
-          if (!hoveredSongRef.current || hoveredSongRef.current.id !== found.id) {
-            hoveredSongRef.current = found;
-            setHoveredSong(found);
+          // Optimized Search: Only loop if songs exist
+          if (songsRef.current) {
+            for (const song of songsRef.current) {
+              const dx = worldX - song.x;
+              const dy = worldY - song.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              if (distance < threshold) {
+                found = song;
+                break; // Stop at first match
+              }
+            }
           }
-        } else {
-          // If we found nothing, and a tooltip is currently showing, HIDE IT
-          if (hoveredSongRef.current !== null) {
-            hoveredSongRef.current = null;
-            setHoveredSong(null);
+
+          if (found) {
+            // Only update if it's a DIFFERENT song than what we are already showing
+            if (!hoveredSongRef.current || hoveredSongRef.current.id !== found.id) {
+              hoveredSongRef.current = found;
+              setHoveredSong(found);
+            }
+          } else {
+            // If we found nothing, and a tooltip is currently showing, HIDE IT
+            if (hoveredSongRef.current !== null) {
+              hoveredSongRef.current = null;
+              setHoveredSong(null);
+            }
           }
         }
         return;
@@ -144,11 +166,15 @@ const useCanvasEvents = (
     return () => {
       canvas.removeEventListener("click", handleClickOnSong);
       canvas.removeEventListener("wheel", handleWheelZoom);
+      canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mousedown", handleMouseDown);
     };
   }, [
+    spatialIndexRef,
+    meshCoordsRef,
+    metadataRef,
+    currentZoom,
     canvasRef,
     transformRef,
     hoveredSongRef,
