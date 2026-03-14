@@ -11,23 +11,10 @@ const Canvas = () => {
   const [isHovered, setIsHovered] = useState(null);
 
   const [loading, setLoading] = useState(false); // New loading state
-  const [progress, setProgress] = useState(0); // For the progress bar
 
   const handleStart = () => {
     setLoading(true);
-    let interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setLoading(false);
-            setRender(true);
-          }, 500);
-          return 100;
-        }
-        return prev + 1;
-      });
-    }, 10);
+    setRender(true);
   };
 
   const options = [
@@ -52,36 +39,8 @@ const Canvas = () => {
         </button>
       )}
 
-      {render ? (
-        <Mesh size={points} />
-      ) : loading ? (
-        /* --- LOADER --- */
-        <div className="w-full h-full bg-[#0a0a0a] flex flex-col items-center justify-center font-sans">
-          <div className="w-64">
-            <div className="flex justify-between mb-2">
-              <span className="text-gray-500 text-[10px] uppercase tracking-[0.3em] animate-pulse">
-                Initializing GPU
-              </span>
-              <span className="text-white text-[10px] font-mono">{progress}%</span>
-            </div>
-
-            {/* Progress Bar Container */}
-            <div className="h-[2px] w-full bg-white/10 overflow-hidden">
-              <div
-                className="h-full bg-white transition-all duration-300 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-
-            <div className="mt-4 text-center">
-              <p className="text-gray-600 text-[9px] uppercase tracking-widest leading-loose">
-                Slow load for initial render <br />
-                If stuck check system metrics
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
+      {/* CONFIG SCREEN */}
+      {!render && (
         <div className="relative w-full h-full bg-[#0a0a0a] flex items-center justify-center overflow-hidden font-sans">
           {/* Subtle Grid Background */}
           <div className="absolute inset-0 opacity-10 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px]"></div>
@@ -142,6 +101,28 @@ const Canvas = () => {
                 <Cpu size={12} />
                 <span>Targeting efficient 1,000,000 vertices</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MESH */}
+      {render && <Mesh size={points} setLoading={setLoading} />}
+
+      {/* LOADER OVERLAY */}
+      {loading && (
+        <div className="absolute inset-0 z-40 w-full h-full bg-[#0a0a0a] flex flex-col items-center justify-center">
+          <div className="w-64">
+            <div className="flex justify-center mb-2">
+              <span className="text-gray-500 text-[10px] uppercase tracking-[0.3em] animate-pulse">
+                Initializing GPU
+              </span>
+            </div>
+            <div className="mt-4 text-center">
+              <p className="text-gray-600 text-[9px] uppercase tracking-widest leading-loose">
+                Slow load for initial render <br />
+                If stuck check system metrics
+              </p>
             </div>
           </div>
         </div>

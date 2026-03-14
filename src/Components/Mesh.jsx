@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { loadMeshFromBackend } from "../api/API";
 import useAutoFetchSongs from "../hooks/useAutoFetchSongs";
 import useCanvasEvents from "../hooks/useCanvasEvents";
 import useGPS from "../hooks/useGPS";
@@ -10,9 +9,24 @@ import Crosshair from "./Crosshair";
 import Preview from "./Preview";
 import Song from "./Song";
 
-export default function Mesh(size) {
+export default function Mesh(props) {
   const canvasRef = useRef(null);
-  const coordsRef = useRef({ x: 0, y: 0 });
+  const coordsRef = useRef({ x: 0, y: 0 }); // For GPS
+  const meshCoordsRef = useRef(null); // For Coordinates
+
+  // --- Testing the new approach to bring kd-tree or GPU picking to client side ---
+  useEffect(() => {
+    const loadData = async () => {
+      const res = await fetch("/dataset/sm/sm_coords.bin");
+      const buffer = await res.arrayBuffer();
+      meshCoordsRef.current = new Float32Array(buffer);
+      setTimeout(() => {
+        props.setLoading(false);
+      }, 2000);
+      startWebGL(); // start rendering AFTER mesh loads
+    };
+    loadData();
+  }, []);
 
   // --- States for maintaining GPS system ---
   const [coords, setCoords] = useState({ x: 0, y: 0 });
@@ -40,7 +54,7 @@ export default function Mesh(size) {
 
   // ----------------------------------------------
   // ----- GPS (coordinates system) handler -------
-  const { updateTransform } = useGPS(currentZoom, setCurrentZoom, size.size);
+  const { updateTransform } = useGPS(currentZoom, setCurrentZoom, props.size);
   // ----------------------------------------------
 
   // ---------------------------------------------
@@ -63,10 +77,12 @@ export default function Mesh(size) {
     setMousePx
   );
 
-  // ------------ Main UseEffect ------------
+  // ------------ Main UseEffect / Function ------------
+  // Previously this was useEffect but now its a function
+  // So we call it after the mesh coords loading is done
   const textureCache = useRef(new Map());
 
-  useEffect(() => {
+  const startWebGL = () => {
     const canvas = canvasRef.current;
     const gl = canvas.getContext("webgl");
     if (!gl) return;
@@ -120,10 +136,10 @@ export default function Mesh(size) {
     let animationFrameId;
 
     const run = async () => {
-      const coordsRaw = await loadMeshFromBackend(size);
+      // ----- POSITION BUFFER -----
       const buffer = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, coordsRaw, gl.STATIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, meshCoordsRef.current, gl.STATIC_DRAW);
       gl.enableVertexAttribArray(dataLoc);
       gl.vertexAttribPointer(dataLoc, 3, gl.FLOAT, false, 0, 0);
 
@@ -160,7 +176,7 @@ export default function Mesh(size) {
         gl.bindTexture(gl.TEXTURE_2D, hoverTexture);
         gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
 
-        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG[size.size]);
+        gl.drawArrays(gl.POINTS, 0, MESH_CONFIG[props.size]);
         animationFrameId = requestAnimationFrame(render);
       };
       render();
@@ -170,7 +186,7 @@ export default function Mesh(size) {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  };
 
   return (
     <>
