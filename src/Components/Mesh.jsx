@@ -1,7 +1,6 @@
 import * as Arrow from "apache-arrow";
 import KDBush from "kdbush";
 import { useEffect, useRef, useState } from "react";
-import useAutoFetchSongs from "../hooks/useAutoFetchSongs";
 import useCanvasEvents from "../hooks/useCanvasEvents";
 import useGPS from "../hooks/useGPS";
 import { MESH_CONFIG } from "../utils/Config";
@@ -16,39 +15,80 @@ export default function Mesh(props) {
   const coordsRef = useRef({ x: 0, y: 0 }); // For GPS
   const meshCoordsRef = useRef(null); // For Coordinates
 
-  // --- New approach to bring kd-tree to client side ---
+  /**
+   * --- New approach to bring kd-tree to client side ---
+   *
+   * Here multiple changes are made:
+   * Since moving kd-tree to client also requires moving datasets to client but the files were too big.
+   * We had to make multiple shards for it to fit the valid size.
+   *
+   */
+
   const metadataRef = useRef(null);
   const spatialIndexRef = useRef(null);
 
   useEffect(() => {
     const loadData = async () => {
-      const [coordsRes, arrowRes] = await Promise.all([
-        fetch("/dataset/sm/sm_coords.bin"),
-        fetch("/dataset/sm/sm.arrow"),
-      ]);
+      const numParts = 9; // Indices 0, 1, 2, 3, 4, 5, 6, 7, 8
+      const indices = Array.from({ length: numParts }, (_, i) => i);
 
-      const coordsBuf = await coordsRes.arrayBuffer();
-      const arrowBuf = await arrowRes.arrayBuffer();
+      try {
+        const fetchAsBuffer = async (url) => {
+          const r = await fetch(url);
+          if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
+          const buf = await r.arrayBuffer();
+          // Check if buffer is suspiciously small (like an error message)
+          if (buf.byteLength < 100) throw new Error(`File ${url} is too small/corrupt`);
+          return buf;
+        };
 
-      const floatArray = new Float32Array(coordsBuf);
-      meshCoordsRef.current = floatArray;
+        // Fetching Coords and Arrow
+        const coordBuffers = await Promise.all(
+          indices.map((i) => fetchAsBuffer(`/dataset/xl/shards/xl_coords_part${i}.bin`))
+        );
+        const arrowBuffers = await Promise.all(
+          indices.map((i) => fetchAsBuffer(`/dataset/xl/shards/xl_metadata_part${i}.arrow`))
+        );
 
-      // Initialize Arrow Table (Zero-copy parsing)
-      metadataRef.current = Arrow.tableFromIPC(new Uint8Array(arrowBuf));
+        // --- Merging Coordinates ---
+        const totalFloats = coordBuffers.reduce((sum, b) => sum + b.byteLength / 4, 0);
+        const combinedCoords = new Float32Array(totalFloats);
 
-      // Building Spatial Index
-      const index = new KDBush(floatArray.length / 3);
-      for (let i = 0; i < floatArray.length; i += 3) {
-        index.add(floatArray[i], floatArray[i + 1]);
+        let floatOffset = 0;
+        for (const buf of coordBuffers) {
+          const view = new Float32Array(buf);
+          combinedCoords.set(view, floatOffset);
+          floatOffset += view.length;
+        }
+        meshCoordsRef.current = combinedCoords;
+
+        // --- Merging the Arrow Tables ---
+        const tables = arrowBuffers
+          .map((buf) => {
+            return Arrow.tableFromIPC(new Uint8Array(buf));
+          })
+          .filter((t) => t !== null); // Remove empty shards
+
+        const allBatches = tables.flatMap((t) => t.batches);
+        // It is vital that the schema matches across all parts
+        metadataRef.current = new Arrow.Table(tables[0].schema, allBatches);
+
+        // --- Building Spatial Index ---
+        const numPoints = combinedCoords.length / 3;
+        const index = new KDBush(numPoints);
+        for (let i = 0; i < combinedCoords.length; i += 3) {
+          index.add(combinedCoords[i], combinedCoords[i + 1]);
+        }
+        index.finish();
+        spatialIndexRef.current = index;
+
+        // ---------------------------------------
+        props.setLoading(false);
+        startWebGL(); // STARTING POINT OF WebGL
+        // ---------------------------------------
+      } catch (err) {
+        console.error("Critical Load Error:", err.message);
       }
-      index.finish();
-      spatialIndexRef.current = index;
-
-      props.setLoading(false);
-
-      // ---------------------------------------
-      startWebGL(); // STARTING POINT OF WebGL
-      // ---------------------------------------
     };
     loadData();
   }, []);
@@ -103,7 +143,8 @@ export default function Mesh(props) {
     setSelectedSong,
     setCoords,
     setHoveredSong,
-    setMousePx
+    setMousePx,
+    props.size
   );
 
   // ------------ Main UseEffect / Function ------------
