@@ -18,7 +18,8 @@ const useCanvasEvents = (
   setSelectedSong,
   setCoords,
   setHoveredSong,
-  setMousePx
+  setMousePx,
+  size
 ) => {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -98,21 +99,25 @@ const useCanvasEvents = (
           // --- TODO ----
           // Make this value dynamic according to the zoom level
           const threshold = 0.005 / t.scale;
+          const maxVisibleIndex = MESH_CONFIG[size];
 
           if (spatialIndexRef.current && metadataRef.current) {
             // FALLBACK for older versions (v3 and below)
             // Older versions used .within() or .range() as methods on the instance
             const ids = spatialIndexRef.current.within(worldX, worldY, threshold);
             if (ids.length > 0) {
-              const pointIdx = ids[0];
-              const arrayIdx = pointIdx * 3;
-              const row = metadataRef.current.get(pointIdx);
-              found = {
-                id: pointIdx,
-                x: meshCoordsRef.current[arrayIdx],
-                y: meshCoordsRef.current[arrayIdx + 1],
-                data: row.toJSON(),
-              };
+              const visibleIds = ids.filter((id) => id < maxVisibleIndex);
+              if (visibleIds.length > 0) {
+                const pointIdx = visibleIds[0];
+                const arrayIdx = pointIdx * 3;
+                const row = metadataRef.current.get(pointIdx);
+                found = {
+                  id: pointIdx,
+                  x: meshCoordsRef.current[arrayIdx],
+                  y: meshCoordsRef.current[arrayIdx + 1],
+                  data: row.toJSON(),
+                };
+              }
             }
           }
 
@@ -184,6 +189,7 @@ const useCanvasEvents = (
     setHoveredSong,
     setSelectedSong,
     setMousePx,
+    size,
   ]);
 };
 
