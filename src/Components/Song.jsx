@@ -111,32 +111,6 @@ const Song = ({ selectedSong, onClear }) => {
               color="bg-rose-500"
             />
           </div>
-
-          <div className="flex items-center gap-4 mt-6">
-            <button className="flex-1 h-14 bg-white text-black rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest text-xs hover:bg-orange-500 transition-colors group cursor-pointer">
-              <div className="bg-black text-white p-1 rounded-full group-hover:bg-white group-hover:text-black">
-                <Play size={16} fill="currentColor" />
-              </div>
-              Preview Track
-            </button>
-
-            <div className="flex gap-2">
-              {[
-                { icon: <Youtube size={18} />, color: "hover:text-red-500", label: "YouTube" },
-                { icon: <Music size={18} />, color: "hover:text-emerald-500", label: "Spotify" },
-                { icon: <ExternalLink size={18} />, color: "hover:text-pink-500", label: "Apple" },
-              ].map((platform, i) => (
-                <button
-                  key={i}
-                  className={`w-14 h-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center text-white/40 transition-all ${platform.color} hover:bg-white/10 hover:border-white/20 cursor-pointer`}
-                  title={platform.label}
-                >
-                  {platform.icon}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="pt-4 flex flex-col gap-4">
             <div className="flex items-center gap-4 tracking-[0.4em] truncate border-t border-white/5 pt-6">
               <ListMusic size={14} className="text-white/20" />
