@@ -6,9 +6,11 @@ import useGPS from "../hooks/useGPS";
 import { MESH_CONFIG } from "../utils/Config";
 import { createProgram, initPlaceholderTexture } from "../webgl/GLUtils";
 import { fs, vs } from "../webgl/Shaders";
+import BorderMagnifier from "./BorderMagnifier";
 import Crosshair from "./Crosshair";
 import Preview from "./Preview";
 import Song from "./Song";
+import SongSearch from "./SongSearch";
 
 export default function Mesh(props) {
   const canvasRef = useRef(null);
@@ -26,10 +28,12 @@ export default function Mesh(props) {
 
   const metadataRef = useRef(null);
   const spatialIndexRef = useRef(null);
+  const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-      const numParts = 9; // Indices 0, 1, 2, 3, 4, 5, 6, 7, 8
+      const pointsPerShard = 111112;
+      const numParts = Math.ceil(MESH_CONFIG[props.size] / pointsPerShard);
       const indices = Array.from({ length: numParts }, (_, i) => i);
 
       try {
@@ -81,6 +85,7 @@ export default function Mesh(props) {
         }
         index.finish();
         spatialIndexRef.current = index;
+        setDataReady(true);
 
         // ---------------------------------------
         props.setLoading(false);
@@ -113,6 +118,111 @@ export default function Mesh(props) {
   const [hoveredSong, setHoveredSong] = useState(null);
   const [selectedSong, setSelectedSong] = useState(null);
   const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const interactionLockedRef = useRef(false);
+  const transitionTokenRef = useRef(0);
+  const transitionFrameRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      transitionTokenRef.current += 1;
+      cancelAnimationFrame(transitionFrameRef.current);
+    },
+    []
+  );
+
+  const animateCamera = (destination, duration, token) =>
+    new Promise((resolve) => {
+      const camera = transform.current;
+      const origin = { x: camera.x, y: camera.y, scale: camera.scale };
+      const startedAt = performance.now();
+
+      const step = (now) => {
+        if (transitionTokenRef.current !== token) {
+          resolve(false);
+          return;
+        }
+
+        const progress = Math.min((now - startedAt) / duration, 1);
+        const eased = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        camera.x = origin.x + (destination.x - origin.x) * eased;
+        camera.y = origin.y + (destination.y - origin.y) * eased;
+        camera.scale = origin.scale + (destination.scale - origin.scale) * eased;
+        camera.targetX = camera.x;
+        camera.targetY = camera.y;
+        camera.targetScale = camera.scale;
+
+        if (progress < 1) transitionFrameRef.current = requestAnimationFrame(step);
+        else resolve(true);
+      };
+
+      transitionFrameRef.current = requestAnimationFrame(step);
+    });
+
+  const focusSearchResult = async (id) => {
+    if (!metadataRef.current || !meshCoordsRef.current || id >= MESH_CONFIG[props.size]) return;
+
+    const arrayIndex = id * 3;
+    const song = {
+      id,
+      x: meshCoordsRef.current[arrayIndex],
+      y: meshCoordsRef.current[arrayIndex + 1],
+      data: metadataRef.current.get(id).toJSON(),
+    };
+
+    const token = transitionTokenRef.current + 1;
+    transitionTokenRef.current = token;
+    interactionLockedRef.current = true;
+    transform.current.isDragging = false;
+    hoveredSongRef.current = null;
+    setHoveredSong(null);
+    setSelectedSong(null);
+    setIsTransitioning(true);
+
+    const overviewScale = Math.max(
+      MESH_CONFIG.MAX_ZOOM_OUT,
+      Math.min(0.18, transform.current.scale * 0.28)
+    );
+    const pause = (duration) => new Promise((resolve) => window.setTimeout(resolve, duration));
+
+    try {
+      // 1. Pull out to a map-wide view.
+      if (
+        !(await animateCamera(
+          { x: transform.current.x, y: transform.current.y, scale: overviewScale },
+          720,
+          token
+        ))
+      ) return;
+
+      // 2. Travel across the map while still zoomed out.
+      if (!(await animateCamera({ x: -song.x, y: -song.y, scale: overviewScale }, 1050, token))) {
+        return;
+      }
+
+      // 3. Three distinct cinematic zoom stages into the selected point.
+      for (const stage of [
+        { scale: 0.52, duration: 480 },
+        { scale: 1.08, duration: 560 },
+        { scale: 2.2, duration: 720 },
+      ]) {
+        await pause(90);
+        if (!(await animateCamera({ x: -song.x, y: -song.y, ...stage }, stage.duration, token))) {
+          return;
+        }
+      }
+
+      if (transitionTokenRef.current === token) setSelectedSong(song);
+    } finally {
+      if (transitionTokenRef.current === token) {
+        interactionLockedRef.current = false;
+        setIsTransitioning(false);
+      }
+    }
+  };
 
   // --- Ref for show image on hover ---
   const currentUrlRef = useRef(null);
@@ -144,7 +254,8 @@ export default function Mesh(props) {
     setCoords,
     setHoveredSong,
     setMousePx,
-    props.size
+    props.size,
+    interactionLockedRef
   );
 
   // ------------ Main UseEffect / Function ------------
@@ -154,7 +265,9 @@ export default function Mesh(props) {
 
   const startWebGL = () => {
     const canvas = canvasRef.current;
-    const gl = canvas.getContext("webgl");
+    // The border magnifier samples completed frames from this canvas.
+    // WebGL may discard its back buffer after compositing unless it is preserved.
+    const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
     if (!gl) return;
 
     // Create the texture object once
@@ -261,10 +374,26 @@ export default function Mesh(props) {
   return (
     <>
       <div className="relative w-screen h-screen bg-neutral-950 flex items-center justify-center overflow-hidden font-sans">
+        <BorderMagnifier sourceCanvasRef={canvasRef} />
+
+        {dataReady && (
+          <SongSearch
+            maxIndex={MESH_CONFIG[props.size]}
+            onSelect={focusSearchResult}
+            disabled={isTransitioning}
+          />
+        )}
+
+        {isTransitioning && (
+          <div className="absolute inset-0 z-30 cursor-wait" aria-label="Travelling to song" />
+        )}
+
         {/* The WebGL Canvas */}
         <canvas
           ref={canvasRef}
-          className="w-[95vw] h-[95vh] rounded-2xl cursor-grab active:cursor-grabbing touch-none border border-white/5"
+          className={`relative z-10 w-[95vw] h-[95vh] rounded-2xl touch-none ${
+            isTransitioning ? "cursor-wait" : "cursor-grab active:cursor-grabbing"
+          }`}
         />
 
         <Song selectedSong={selectedSong} onClear={() => setSelectedSong(null)} />
@@ -274,7 +403,7 @@ export default function Mesh(props) {
         {hoveredSong && <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>}
 
         {/* Bottom-Left Coordinate HUD */}
-        <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
+        <div className="absolute z-20 bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
           <span className="text-blue-400">POS:</span> {coords.x}, {coords.y}
           <span className="mx-2 text-white/20">|</span>
           <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}x

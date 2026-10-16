@@ -5,17 +5,17 @@ import {
   ExternalLink,
   ListMusic,
   Music,
-  Play,
   Terminal,
   X,
   Youtube,
   Zap,
 } from "lucide-react";
+import { createElement, useEffect } from "react";
 
-const Metric = ({ label, value, icon: Icon, color }) => (
+const Metric = ({ label, value, icon, color }) => (
   <div className="bg-white/3 border border-white/10 rounded-xl h-[85px] w-full p-4 flex flex-col justify-between">
     <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-white/40">
-      <Icon size={12} />
+      {createElement(icon, { size: 12 })}
       {label}
     </div>
     <div className="space-y-2">
@@ -35,9 +35,24 @@ const Metric = ({ label, value, icon: Icon, color }) => (
 );
 
 const Song = ({ selectedSong, onClear }) => {
+  useEffect(() => {
+    if (!selectedSong) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClear();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedSong, onClear]);
+
   if (!selectedSong) return null;
 
   const { data } = selectedSong;
+  const artists = String(data.artists ?? "").replace(/['[\]]/g, "");
+  const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+    `${data.name} ${artists}`
+  )}`;
 
   return (
     <div className="absolute top-1/2 left-1/4 -translate-x-1/2 -translate-y-1/2 z-50 w-[600px] h-[800px]">
@@ -84,7 +99,7 @@ const Song = ({ selectedSong, onClear }) => {
               {data.name}
             </h3>
             <p className="text-white/40 text-[12px] uppercase tracking-[0.3em] font-light truncate">
-              {data.artists.replace(/['\[\]]/g, "")}
+              {artists}
             </p>
           </div>
         </div>
@@ -111,6 +126,33 @@ const Song = ({ selectedSong, onClear }) => {
               color="bg-rose-500"
             />
           </div>
+
+          <a
+            href={youtubeSearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Search YouTube for ${data.name} by ${artists}`}
+            className="group mt-4 flex w-full items-center justify-between rounded-xl border border-red-500/25 bg-red-500/8 px-5 py-3 text-red-100 transition-all hover:border-red-500/60 hover:bg-red-500/15"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white shadow-[0_0_24px_rgba(220,38,38,0.3)]">
+                <Youtube size={17} strokeWidth={2} />
+              </span>
+              <span className="text-left">
+                <span className="block text-[10px] font-bold uppercase tracking-[0.24em]">
+                  Find on YouTube
+                </span>
+                <span className="block max-w-[360px] truncate text-[9px] text-white/35">
+                  {data.name} · {artists}
+                </span>
+              </span>
+            </span>
+            <ExternalLink
+              size={14}
+              className="text-white/30 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white/70"
+            />
+          </a>
+
           <div className="pt-4 flex flex-col gap-4">
             <div className="flex items-center gap-4 tracking-[0.4em] truncate border-t border-white/5 pt-6">
               <ListMusic size={14} className="text-white/20" />

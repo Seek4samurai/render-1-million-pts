@@ -33,6 +33,17 @@ body {
   transition: background-color 1s ease-in-out;
 }
 
+.border-magnifier {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 1;
+  pointer-events: none;
+  filter: blur(0.8px) saturate(1.6) contrast(1.35) brightness(2.2);
+}
+
 /* h1 {
   font-size: 3.2em;
   line-height: 1.1;
