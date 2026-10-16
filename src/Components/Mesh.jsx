@@ -1,5 +1,6 @@
 import * as Arrow from "apache-arrow";
 import KDBush from "kdbush";
+import { Info } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import useCanvasEvents from "../hooks/useCanvasEvents";
 import useGPS from "../hooks/useGPS";
@@ -407,6 +408,30 @@ export default function Mesh(props) {
           <span className="text-blue-400">POS:</span> {coords.x}, {coords.y}
           <span className="mx-2 text-white/20">|</span>
           <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}x
+        </div>
+
+        <div className="group absolute bottom-10 right-10 z-20">
+          <div
+            role="tooltip"
+            className="pointer-events-none absolute right-0 bottom-full mb-2.5 whitespace-nowrap rounded-lg border border-white/8 bg-black/80 px-3 py-2 text-[10px] text-white/55 opacity-0 shadow-xl backdrop-blur-md transition-all duration-200 after:absolute after:top-full after:right-0 after:h-3 after:w-full after:content-[''] group-hover:pointer-events-auto group-hover:-translate-y-0.5 group-hover:opacity-100"
+          >
+            <span className="block italic">This is not a vibe coded app</span>
+            <a
+              href="https://github.com/Seek4samurai/render-1-million-pts/blob/main/public/document/render_1m_points_document.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 block text-cyan-200/65 underline decoration-cyan-200/20 underline-offset-2 transition-colors hover:text-cyan-100"
+            >
+              How it was made
+            </a>
+          </div>
+          <button
+            type="button"
+            aria-label="About this application"
+            className="flex h-8 w-8 cursor-help items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/40 shadow-lg backdrop-blur-md transition-colors hover:border-white/25 hover:text-white/80"
+          >
+            <Info size={14} />
+          </button>
         </div>
       </div>
     </>
