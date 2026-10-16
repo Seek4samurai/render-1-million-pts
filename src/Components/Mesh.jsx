@@ -1,6 +1,6 @@
 import * as Arrow from "apache-arrow";
 import KDBush from "kdbush";
-import { Info } from "lucide-react";
+import { Gauge, Info, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import useCanvasEvents from "../hooks/useCanvasEvents";
 import useGPS from "../hooks/useGPS";
@@ -12,6 +12,7 @@ import Crosshair from "./Crosshair";
 import Preview from "./Preview";
 import Song from "./Song";
 import SongSearch from "./SongSearch";
+import SystemMonitor from "./SystemMonitor";
 
 export default function Mesh(props) {
   const canvasRef = useRef(null);
@@ -30,6 +31,8 @@ export default function Mesh(props) {
   const metadataRef = useRef(null);
   const spatialIndexRef = useRef(null);
   const [dataReady, setDataReady] = useState(false);
+  const [searchEnabled, setSearchEnabled] = useState(true);
+  const [monitorEnabled, setMonitorEnabled] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -382,7 +385,58 @@ export default function Mesh(props) {
             maxIndex={MESH_CONFIG[props.size]}
             onSelect={focusSearchResult}
             disabled={isTransitioning}
+            visible={searchEnabled}
           />
+        )}
+
+        <div className="absolute top-5 right-8 z-40 flex flex-col items-end gap-2">
+          {[
+            {
+              label: "Search",
+              icon: <Search size={13} />,
+              enabled: searchEnabled,
+              toggle: () => setSearchEnabled((enabled) => !enabled),
+            },
+            {
+              label: "Monitor",
+              icon: <Gauge size={13} />,
+              enabled: monitorEnabled,
+              toggle: () => setMonitorEnabled((enabled) => !enabled),
+            },
+          ].map((control) => (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={control.enabled}
+              onClick={control.toggle}
+              key={control.label}
+              className="group flex h-10 items-center gap-3 rounded-full border border-white/25 bg-neutral-900/92 px-3 text-white/80 shadow-[0_8px_28px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition-all hover:border-cyan-100/35 hover:bg-neutral-800/95 hover:text-white"
+            >
+              {control.icon}
+              <span className="text-[9px] font-medium uppercase tracking-[0.18em]">
+                {control.label}
+              </span>
+              <span
+                className={`relative h-5 w-9 rounded-full border transition-colors ${
+                  control.enabled
+                    ? "border-cyan-200/25 bg-cyan-300/16"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <span
+                  className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-all duration-200 ${
+                    control.enabled
+                      ? "left-[18px] bg-cyan-100 shadow-[0_0_10px_rgba(165,243,252,0.45)]"
+                      : "left-0.5 bg-white/35"
+                  }`}
+                />
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {monitorEnabled && (
+          <SystemMonitor canvasRef={canvasRef} pointCount={MESH_CONFIG[props.size]} />
         )}
 
         {isTransitioning && (
@@ -428,9 +482,9 @@ export default function Mesh(props) {
           <button
             type="button"
             aria-label="About this application"
-            className="flex h-8 w-8 cursor-help items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/40 shadow-lg backdrop-blur-md transition-colors hover:border-white/25 hover:text-white/80"
+            className="flex h-9 w-9 cursor-help items-center justify-center rounded-full border border-white/25 bg-neutral-900/92 text-white/80 shadow-[0_8px_28px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md transition-all hover:border-cyan-100/40 hover:bg-neutral-800 hover:text-white"
           >
-            <Info size={14} />
+            <Info size={15} strokeWidth={2.2} />
           </button>
         </div>
       </div>

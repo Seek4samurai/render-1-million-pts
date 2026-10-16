@@ -1,7 +1,7 @@
 import { ArrowUpRight, Database, LoaderCircle, LocateFixed, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-const SongSearch = ({ maxIndex, onSelect, disabled = false }) => {
+const SongSearch = ({ maxIndex, onSelect, disabled = false, visible = true }) => {
   const workerRef = useRef(null);
   const requestIdRef = useRef(0);
   const rootRef = useRef(null);
@@ -44,7 +44,7 @@ const SongSearch = ({ maxIndex, onSelect, disabled = false }) => {
       const target = event.target;
       const isTyping = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 
-      if (event.key === "/" && !isTyping && status === "ready") {
+      if (event.key === "/" && !isTyping && status === "ready" && visible) {
         event.preventDefault();
         inputRef.current?.focus();
         setOpen(true);
@@ -61,7 +61,7 @@ const SongSearch = ({ maxIndex, onSelect, disabled = false }) => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
       window.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [status]);
+  }, [status, visible]);
 
   useEffect(() => {
     if (status !== "ready") return undefined;
@@ -101,8 +101,12 @@ const SongSearch = ({ maxIndex, onSelect, disabled = false }) => {
   return (
     <div
       ref={rootRef}
-      className={`absolute top-5 left-1/2 z-40 w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 transition-opacity ${
-        disabled ? "pointer-events-none opacity-45" : "opacity-100"
+      className={`absolute top-5 left-1/2 z-40 w-[min(620px,calc(100vw-2rem))] -translate-x-1/2 transition-all duration-200 ${
+        !visible
+          ? "pointer-events-none -translate-y-3 opacity-0"
+          : disabled
+            ? "pointer-events-none opacity-45"
+            : "opacity-100"
       }`}
     >
       <div
@@ -126,7 +130,7 @@ const SongSearch = ({ maxIndex, onSelect, disabled = false }) => {
           <input
             ref={inputRef}
             value={query}
-            disabled={disabled || isIndexing || status === "error"}
+            disabled={!visible || disabled || isIndexing || status === "error"}
             onFocus={() => setOpen(true)}
             onChange={(event) => {
               const nextQuery = event.target.value;
