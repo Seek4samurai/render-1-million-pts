@@ -1,14 +1,18 @@
 import * as Arrow from "apache-arrow";
 import KDBush from "kdbush";
+import { Gauge, Info, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import useCanvasEvents from "../hooks/useCanvasEvents";
 import useGPS from "../hooks/useGPS";
 import { MESH_CONFIG } from "../utils/Config";
 import { createProgram, initPlaceholderTexture } from "../webgl/GLUtils";
 import { fs, vs } from "../webgl/Shaders";
+import BorderMagnifier from "./BorderMagnifier";
 import Crosshair from "./Crosshair";
 import Preview from "./Preview";
 import Song from "./Song";
+import SongSearch from "./SongSearch";
+import SystemMonitor from "./SystemMonitor";
 
 export default function Mesh(props) {
   const canvasRef = useRef(null);
@@ -26,10 +30,14 @@ export default function Mesh(props) {
 
   const metadataRef = useRef(null);
   const spatialIndexRef = useRef(null);
+  const [dataReady, setDataReady] = useState(false);
+  const [searchEnabled, setSearchEnabled] = useState(true);
+  const [monitorEnabled, setMonitorEnabled] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
-      const numParts = 9; // Indices 0, 1, 2, 3, 4, 5, 6, 7, 8
+      const pointsPerShard = 111112;
+      const numParts = Math.ceil(MESH_CONFIG[props.size] / pointsPerShard);
       const indices = Array.from({ length: numParts }, (_, i) => i);
 
       try {
@@ -81,6 +89,7 @@ export default function Mesh(props) {
         }
         index.finish();
         spatialIndexRef.current = index;
+        setDataReady(true);
 
         // ---------------------------------------
         props.setLoading(false);
@@ -113,6 +122,111 @@ export default function Mesh(props) {
   const [hoveredSong, setHoveredSong] = useState(null);
   const [selectedSong, setSelectedSong] = useState(null);
   const [mousePx, setMousePx] = useState({ x: 0, y: 0 });
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const interactionLockedRef = useRef(false);
+  const transitionTokenRef = useRef(0);
+  const transitionFrameRef = useRef(null);
+
+  useEffect(
+    () => () => {
+      transitionTokenRef.current += 1;
+      cancelAnimationFrame(transitionFrameRef.current);
+    },
+    []
+  );
+
+  const animateCamera = (destination, duration, token) =>
+    new Promise((resolve) => {
+      const camera = transform.current;
+      const origin = { x: camera.x, y: camera.y, scale: camera.scale };
+      const startedAt = performance.now();
+
+      const step = (now) => {
+        if (transitionTokenRef.current !== token) {
+          resolve(false);
+          return;
+        }
+
+        const progress = Math.min((now - startedAt) / duration, 1);
+        const eased = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        camera.x = origin.x + (destination.x - origin.x) * eased;
+        camera.y = origin.y + (destination.y - origin.y) * eased;
+        camera.scale = origin.scale + (destination.scale - origin.scale) * eased;
+        camera.targetX = camera.x;
+        camera.targetY = camera.y;
+        camera.targetScale = camera.scale;
+
+        if (progress < 1) transitionFrameRef.current = requestAnimationFrame(step);
+        else resolve(true);
+      };
+
+      transitionFrameRef.current = requestAnimationFrame(step);
+    });
+
+  const focusSearchResult = async (id) => {
+    if (!metadataRef.current || !meshCoordsRef.current || id >= MESH_CONFIG[props.size]) return;
+
+    const arrayIndex = id * 3;
+    const song = {
+      id,
+      x: meshCoordsRef.current[arrayIndex],
+      y: meshCoordsRef.current[arrayIndex + 1],
+      data: metadataRef.current.get(id).toJSON(),
+    };
+
+    const token = transitionTokenRef.current + 1;
+    transitionTokenRef.current = token;
+    interactionLockedRef.current = true;
+    transform.current.isDragging = false;
+    hoveredSongRef.current = null;
+    setHoveredSong(null);
+    setSelectedSong(null);
+    setIsTransitioning(true);
+
+    const overviewScale = Math.max(
+      MESH_CONFIG.MAX_ZOOM_OUT,
+      Math.min(0.18, transform.current.scale * 0.28)
+    );
+    const pause = (duration) => new Promise((resolve) => window.setTimeout(resolve, duration));
+
+    try {
+      // 1. Pull out to a map-wide view.
+      if (
+        !(await animateCamera(
+          { x: transform.current.x, y: transform.current.y, scale: overviewScale },
+          720,
+          token
+        ))
+      ) return;
+
+      // 2. Travel across the map while still zoomed out.
+      if (!(await animateCamera({ x: -song.x, y: -song.y, scale: overviewScale }, 1050, token))) {
+        return;
+      }
+
+      // 3. Three distinct cinematic zoom stages into the selected point.
+      for (const stage of [
+        { scale: 0.52, duration: 480 },
+        { scale: 1.08, duration: 560 },
+        { scale: 2.2, duration: 720 },
+      ]) {
+        await pause(90);
+        if (!(await animateCamera({ x: -song.x, y: -song.y, ...stage }, stage.duration, token))) {
+          return;
+        }
+      }
+
+      if (transitionTokenRef.current === token) setSelectedSong(song);
+    } finally {
+      if (transitionTokenRef.current === token) {
+        interactionLockedRef.current = false;
+        setIsTransitioning(false);
+      }
+    }
+  };
 
   // --- Ref for show image on hover ---
   const currentUrlRef = useRef(null);
@@ -144,7 +258,8 @@ export default function Mesh(props) {
     setCoords,
     setHoveredSong,
     setMousePx,
-    props.size
+    props.size,
+    interactionLockedRef
   );
 
   // ------------ Main UseEffect / Function ------------
@@ -154,7 +269,9 @@ export default function Mesh(props) {
 
   const startWebGL = () => {
     const canvas = canvasRef.current;
-    const gl = canvas.getContext("webgl");
+    // The border magnifier samples completed frames from this canvas.
+    // WebGL may discard its back buffer after compositing unless it is preserved.
+    const gl = canvas.getContext("webgl", { preserveDrawingBuffer: true });
     if (!gl) return;
 
     // Create the texture object once
@@ -261,10 +378,77 @@ export default function Mesh(props) {
   return (
     <>
       <div className="relative w-screen h-screen bg-neutral-950 flex items-center justify-center overflow-hidden font-sans">
+        <BorderMagnifier sourceCanvasRef={canvasRef} />
+
+        {dataReady && (
+          <SongSearch
+            maxIndex={MESH_CONFIG[props.size]}
+            onSelect={focusSearchResult}
+            disabled={isTransitioning}
+            visible={searchEnabled}
+          />
+        )}
+
+        <div className="absolute top-5 right-8 z-40 flex flex-col items-end gap-2">
+          {[
+            {
+              label: "Search",
+              icon: <Search size={13} />,
+              enabled: searchEnabled,
+              toggle: () => setSearchEnabled((enabled) => !enabled),
+            },
+            {
+              label: "Monitor",
+              icon: <Gauge size={13} />,
+              enabled: monitorEnabled,
+              toggle: () => setMonitorEnabled((enabled) => !enabled),
+            },
+          ].map((control) => (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={control.enabled}
+              onClick={control.toggle}
+              key={control.label}
+              className="group flex h-10 items-center gap-3 rounded-full border border-white/25 bg-neutral-900/92 px-3 text-white/80 shadow-[0_8px_28px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition-all hover:border-cyan-100/35 hover:bg-neutral-800/95 hover:text-white"
+            >
+              {control.icon}
+              <span className="text-[9px] font-medium uppercase tracking-[0.18em]">
+                {control.label}
+              </span>
+              <span
+                className={`relative h-5 w-9 rounded-full border transition-colors ${
+                  control.enabled
+                    ? "border-cyan-200/25 bg-cyan-300/16"
+                    : "border-white/10 bg-white/5"
+                }`}
+              >
+                <span
+                  className={`absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full transition-all duration-200 ${
+                    control.enabled
+                      ? "left-[18px] bg-cyan-100 shadow-[0_0_10px_rgba(165,243,252,0.45)]"
+                      : "left-0.5 bg-white/35"
+                  }`}
+                />
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {monitorEnabled && (
+          <SystemMonitor canvasRef={canvasRef} pointCount={MESH_CONFIG[props.size]} />
+        )}
+
+        {isTransitioning && (
+          <div className="absolute inset-0 z-30 cursor-wait" aria-label="Travelling to song" />
+        )}
+
         {/* The WebGL Canvas */}
         <canvas
           ref={canvasRef}
-          className="w-[95vw] h-[95vh] rounded-2xl cursor-grab active:cursor-grabbing touch-none border border-white/5"
+          className={`relative z-10 w-[95vw] h-[95vh] rounded-2xl touch-none ${
+            isTransitioning ? "cursor-wait" : "cursor-grab active:cursor-grabbing"
+          }`}
         />
 
         <Song selectedSong={selectedSong} onClear={() => setSelectedSong(null)} />
@@ -274,10 +458,34 @@ export default function Mesh(props) {
         {hoveredSong && <Preview mousePx={mousePx} hoveredSong={hoveredSong}></Preview>}
 
         {/* Bottom-Left Coordinate HUD */}
-        <div className="absolute bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
+        <div className="absolute z-20 bottom-10 left-15 bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/5 text-white/80 text-xs font-mono shadow-lg">
           <span className="text-blue-400">POS:</span> {coords.x}, {coords.y}
           <span className="mx-2 text-white/20">|</span>
           <span className="text-emerald-400">ZOOM:</span> {currentZoom.toFixed(2)}x
+        </div>
+
+        <div className="group absolute bottom-10 right-10 z-20">
+          <div
+            role="tooltip"
+            className="pointer-events-none absolute right-0 bottom-full mb-2.5 whitespace-nowrap rounded-lg border border-white/8 bg-black/80 px-3 py-2 text-[10px] text-white/55 opacity-0 shadow-xl backdrop-blur-md transition-all duration-200 after:absolute after:top-full after:right-0 after:h-3 after:w-full after:content-[''] group-hover:pointer-events-auto group-hover:-translate-y-0.5 group-hover:opacity-100"
+          >
+            <span className="block italic">This is not a vibe coded app</span>
+            <a
+              href="https://github.com/Seek4samurai/render-1-million-pts/blob/main/public/document/render_1m_points_document.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 block text-cyan-200/65 underline decoration-cyan-200/20 underline-offset-2 transition-colors hover:text-cyan-100"
+            >
+              How it was made
+            </a>
+          </div>
+          <button
+            type="button"
+            aria-label="About this application"
+            className="flex h-9 w-9 cursor-help items-center justify-center rounded-full border border-white/25 bg-neutral-900/92 text-white/80 shadow-[0_8px_28px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md transition-all hover:border-cyan-100/40 hover:bg-neutral-800 hover:text-white"
+          >
+            <Info size={15} strokeWidth={2.2} />
+          </button>
         </div>
       </div>
     </>

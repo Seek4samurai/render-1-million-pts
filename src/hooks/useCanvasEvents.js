@@ -19,7 +19,8 @@ const useCanvasEvents = (
   setCoords,
   setHoveredSong,
   setMousePx,
-  size
+  size,
+  interactionLockedRef
 ) => {
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,6 +28,8 @@ const useCanvasEvents = (
 
     // --- 1. Click on a song Logic ---
     const handleClickOnSong = () => {
+      if (interactionLockedRef.current) return;
+
       if (hoveredSongRef.current) {
         const song = hoveredSongRef.current;
         const t = transformRef.current;
@@ -47,6 +50,8 @@ const useCanvasEvents = (
     // --- 2. Scroll Zoom Logic ---
     const handleWheelZoom = (e) => {
       e.preventDefault();
+      if (interactionLockedRef.current) return;
+
       const t = transformRef.current;
       t.targetScale *= Math.exp(-e.deltaY * MESH_CONFIG.ZOOM_SPEED);
 
@@ -66,6 +71,8 @@ const useCanvasEvents = (
 
     // --- 4. Dragging logic ---
     const handleMouseDown = (e) => {
+      if (interactionLockedRef.current) return;
+
       const t = transformRef.current;
       t.isDragging = true;
       t.lastMouse = { x: e.clientX, y: e.clientY };
@@ -77,6 +84,8 @@ const useCanvasEvents = (
 
     // --- 5. logic that helps on hover movement of mouse over points ---
     const handleMouseMove = (e) => {
+      if (interactionLockedRef.current) return;
+
       const t = transformRef.current;
       const rect = canvas.getBoundingClientRect();
 
@@ -190,6 +199,7 @@ const useCanvasEvents = (
     setSelectedSong,
     setMousePx,
     size,
+    interactionLockedRef,
   ]);
 };
 

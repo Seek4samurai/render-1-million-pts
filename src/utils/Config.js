@@ -8,7 +8,9 @@ export const MESH_CONFIG = {
    * t.y = Math.min(limit, Math.max(-limit, t.y));
    * };
    */
-  NORMAL_LIMIT: 3,
+  // Baked coordinates reach approximately +/-4.18 even in the smaller datasets.
+  // Keep enough camera travel to center every searchable point.
+  NORMAL_LIMIT: 4.5,
   LARGE_LIMIT: 4.5,
 
   /**
